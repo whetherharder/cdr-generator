@@ -47,6 +47,14 @@ class Subscriber(BaseModel):
     serving_ne_id: str
 
 
+class Assets(BaseModel):
+    """Bundled runtime assets: cells, network elements, and subscribers."""
+
+    cells: list[Cell]
+    network_elements: list[NetworkElement]
+    subscribers: list[Subscriber]
+
+
 class AssetManifest(BaseModel):
     """Manifest tracking asset generation provenance."""
 
