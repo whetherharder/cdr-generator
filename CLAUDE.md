@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **CDR Generator** — a Python CLI tool for generating synthetic Call Detail Records (CDR) for telecom network testing. Produces realistic CSV+gzip files per Network Element per day, with configurable subscriber profiles, anomalies, and special events.
 
-**Status**: Implementation in progress. See `plan.md` for the 6-phase roadmap. `cdr_generator_config.yaml` is the reference config (v0.7).
+**Status**: Phase 1 complete (158/158 tests). Phase 2 next. See `plan.md` for the 6-phase roadmap. `cdr_generator_config.yaml` is the reference config (v0.7).
 
 ## Commands
 
@@ -103,3 +103,36 @@ See `cdr_generator_config.yaml` for full annotated config. Top-level sections:
 - `vendor_extensions` — per-vendor field generators
 
 Distributions use: `{type: lognormal|poisson|zipf|categorical|..., params: {...}}`.
+
+## Development Rules (Claude)
+
+### Gitflow
+- `main` и `develop` защищены — только через PR с 1 апрувом (настроено в GitHub)
+- Ветки: `feature/phase-N-*` от `develop`, `hotfix/*` от `main`
+- Перед любой работой: `git checkout develop && git pull && git checkout -b feature/...`
+- После завершения фичи: коммит → push → `gh pr create --base develop`
+- Codex (chatgpt-codex-connector) автоматически ревьюит каждый PR — следи за его комментариями и адресуй замечания до мержа
+
+### Мониторинг PR
+- После открытия PR проверять комментарии Codex: `gh pr view <N> --comments`
+- Если Codex оставил замечания — исправить, запушить, затригерить повторное ревью: `gh pr comment <N> --body "@codex review"`
+- Мержить только когда: тесты зелёные + Codex без блокирующих замечаний + 1 апрув
+
+### Разработка
+- Активировать venv перед любой Python-командой: `source .venv/bin/activate`
+- Запускать тесты перед каждым коммитом: `pytest tests/ -q --tb=short`
+- Коммит только если все тесты проходят
+- Каждая фаза = отдельная feature-ветка, отдельный PR
+- Новый функционал → сначала тест (TDD), потом реализация
+
+### Команды агентов
+- Architect → проектирует модули и interfaces до начала реализации
+- Developer → реализует только после того как architect определил API
+- Tester → пишет тесты параллельно с architect (stub-тесты), зеленеют после реализации
+- PM → декомпозирует фазу на задачи ≤4ч, расставляет зависимости в TaskList
+- После завершения фазы — все агенты shutdown, TeamDelete
+
+### Качество кода
+- Никаких stub-реализаций в коммитах (`pass`, `raise NotImplementedError`, `TODO`)
+- Публичный API модуля должен совпадать с тем что импортируют тесты — проверять до коммита
+- `pytest tests/ -q` — финальная проверка перед `git push`
