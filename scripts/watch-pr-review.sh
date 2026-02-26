@@ -14,7 +14,8 @@ echo ""
 
 while true; do
   COMMENTS=$(gh pr view "$PR" --comments --json comments -q '.comments[] | select(.author.login == "chatgpt-codex-connector") | .body' 2>/dev/null || echo "")
-  COUNT=$(echo "$COMMENTS" | grep -c "." 2>/dev/null || echo 0)
+  COUNT=$(echo "$COMMENTS" | grep -c "." 2>/dev/null; true)
+  COUNT=${COUNT:-0}
 
   if [[ "$COUNT" -gt "$SEEN_COUNT" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
