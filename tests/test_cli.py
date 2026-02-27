@@ -248,7 +248,7 @@ class TestGenerateCommand:
                 f"File {gz_file.name} has {len(data_lines)} data lines, expected 1 (header only)"
             )
 
-    def test_generate_without_dry_run_warns(
+    def test_generate_without_dry_run_produces_records(
         self, runner: CliRunner, sample_config_path: pathlib.Path, tmp_path: pathlib.Path
     ) -> None:
         output_dir = tmp_path / "output"
@@ -260,10 +260,12 @@ class TestGenerateCommand:
                 "--config", str(sample_config_path),
                 "--assets-dir", str(assets_dir),
                 "--output-dir", str(output_dir),
+                "--override", "subscribers.total_count=10",
+                "--override", "meta.time_range.end=2025-01-01T00:59:59Z",
             ],
         )
         assert result.exit_code == 0
-        assert "not implemented" in result.output.lower() or "Phase 2" in result.output
+        assert "Generation complete" in result.output
 
     def test_generate_with_override(
         self, runner: CliRunner, sample_config_path: pathlib.Path, tmp_path: pathlib.Path
