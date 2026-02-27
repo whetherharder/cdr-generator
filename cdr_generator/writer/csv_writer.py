@@ -87,75 +87,58 @@ class CSVWriter:
 
 
 class CsvWriter:
-    """Per-file context manager writer for a single (ne_id, date) combination.
+    """High-level CDR writer: one call to ``write_file`` creates a complete
+    gzip-compressed CSV for a given ``(ne_id, date)`` pair.
 
     Usage::
 
-        with CsvWriter(output_dir, ne_id, day, delimiter=",") as w:
-            w.write_header(CDR_FIELDS)
-            w.write_record({"record_type": "mo_call", ...})
+        writer = CsvWriter(output_dir=Path("./output"))
+        writer.write_file(ne_id="msc-01", file_date=date(2025, 1, 1), records=[])
+        writer.close()
     """
 
     def __init__(
         self,
         output_dir: str | Path,
-        ne_id: str,
-        date: date,
         delimiter: str = ",",
+        include_metadata: bool = True,
     ) -> None:
         self._output_dir = Path(output_dir)
-        self._ne_id = ne_id
-        self._date = date
         self._delimiter = delimiter
-        self._file_path = (
-            self._output_dir
-            / ne_id
-            / f"CDR_{ne_id}_{date:%Y%m%d}.csv.gz"
-        )
-        self._gz_file: gzip.GzipFile | None = None
-        self._writer: csv.DictWriter | None = None
-        self._text_wrapper: io.TextIOWrapper | None = None
+        self._include_metadata = include_metadata
 
-    @property
-    def file_path(self) -> Path:
-        return self._file_path
+    def write_file(
+        self,
+        ne_id: str,
+        file_date: date,
+        records: list[CDRRecord] | None = None,
+    ) -> Path:
+        """Write a complete CDR file for *(ne_id, file_date)*.
 
-    def open(self) -> CsvWriter:
-        """Open the gzip file for writing."""
-        self._file_path.parent.mkdir(parents=True, exist_ok=True)
-        self._gz_file = gzip.open(self._file_path, "wb")
-        self._text_wrapper = io.TextIOWrapper(self._gz_file, encoding="utf-8", newline="")
-        return self
+        Creates the NE subdirectory, writes an optional metadata comment,
+        the CSV header, and any *records*.  Returns the file path.
+        """
+        date_str = file_date.strftime("%Y%m%d")
+        file_path = self._output_dir / ne_id / f"CDR_{ne_id}_{date_str}.csv.gz"
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with gzip.open(file_path, "wt", encoding="utf-8", newline="") as gz:
+            if self._include_metadata:
+                gz.write(f"# ne_id={ne_id}, date={date_str}\n")
+
+            writer = csv.writer(gz, delimiter=self._delimiter)
+            writer.writerow(CDR_FIELDS)
+
+            for record in records or []:
+                writer.writerow(to_csv_row(record))
+
+        return file_path
 
     def close(self) -> None:
-        """Flush and close the underlying file."""
-        if self._text_wrapper is not None:
-            self._text_wrapper.close()
-            self._text_wrapper = None
-        if self._gz_file is not None:
-            self._gz_file = None
-        self._writer = None
-
-    def write_header(self, columns: list[str]) -> None:
-        """Write the CSV header row and initialize the DictWriter."""
-        if self._text_wrapper is None:
-            self.open()
-        self._writer = csv.DictWriter(
-            self._text_wrapper,  # type: ignore[arg-type]
-            fieldnames=columns,
-            delimiter=self._delimiter,
-            extrasaction="ignore",
-        )
-        self._writer.writeheader()
-
-    def write_record(self, row: dict[str, object]) -> None:
-        """Write a single record row (dict keyed by column name)."""
-        if self._writer is None:
-            raise RuntimeError("write_header() must be called before write_record()")
-        self._writer.writerow(row)
+        """No-op -- each ``write_file`` call is self-contained."""
 
     def __enter__(self) -> CsvWriter:
-        return self.open()
+        return self
 
     def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
         self.close()

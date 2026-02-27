@@ -93,6 +93,13 @@ def run_generation(
     np_rng = np.random.default_rng(config.meta.seed)
     py_rng = random.Random(config.meta.seed)
 
+    # Collect external number prefixes for b-party selection
+    ext_prefixes: list[str] = []
+    ext_weights: list[float] = []
+    for ep in config.subscribers.external_numbers.prefixes:
+        ext_prefixes.append(ep.prefix)
+        ext_weights.append(ep.weight)
+
     # Time range
     start_dt = config.meta.time_range.start.replace(tzinfo=timezone.utc)
     end_dt = config.meta.time_range.end.replace(tzinfo=timezone.utc)
@@ -141,10 +148,7 @@ def run_generation(
             msc_ne = tac_to_ne["msc"].get(home_tac)
             if n_voice > 0 and msc_ne is not None:
                 for _ in range(n_voice):
-                    # B-party = random subscriber (Phase 2 simplification)
-                    callee = subscribers[py_rng.randint(0, len(subscribers) - 1)]
-                    if callee.imsi == sub.imsi:
-                        callee = subscribers[(subscribers.index(sub) + 1) % len(subscribers)]
+                    callee = _pick_b_party(sub, subscribers, ext_prefixes, ext_weights, py_rng)
 
                     cdrs = generate_voice_cdr(
                         caller=sub,
@@ -176,9 +180,7 @@ def run_generation(
             smsc_ne = tac_to_ne["smsc"].get(home_tac)
             if n_sms > 0 and smsc_ne is not None:
                 for _ in range(n_sms):
-                    recipient = subscribers[py_rng.randint(0, len(subscribers) - 1)]
-                    if recipient.imsi == sub.imsi:
-                        recipient = subscribers[(subscribers.index(sub) + 1) % len(subscribers)]
+                    recipient = _pick_b_party(sub, subscribers, ext_prefixes, ext_weights, py_rng)
 
                     cdrs = generate_sms_cdr(
                         sender=sub,
@@ -250,3 +252,56 @@ def run_generation(
         current_date += timedelta(days=1)
 
     return stats
+
+
+def _pick_b_party(
+    a_party: Subscriber,
+    all_subscribers: list[Subscriber],
+    ext_prefixes: list[str],
+    ext_weights: list[float],
+    rng: random.Random,
+) -> Subscriber:
+    """Select a B-party: 75% random subscriber, 25% external number.
+
+    For Phase 2, external numbers are represented as a synthetic Subscriber
+    with a generated MSISDN from the configured prefixes.
+    """
+    if rng.random() < 0.25 and ext_prefixes:
+        return _generate_external_subscriber(ext_prefixes, ext_weights, rng)
+
+    # Pick a random subscriber (different from A-party if possible)
+    if len(all_subscribers) <= 1:
+        return all_subscribers[0]
+
+    candidate = a_party
+    for _ in range(10):
+        candidate = rng.choice(all_subscribers)
+        if candidate.imsi != a_party.imsi:
+            break
+    return candidate
+
+
+def _generate_external_subscriber(
+    prefixes: list[str],
+    weights: list[float],
+    rng: random.Random,
+) -> Subscriber:
+    """Create a synthetic Subscriber representing an external number."""
+    total_w = sum(weights)
+    if total_w <= 0:
+        prefix = prefixes[0] if prefixes else "+7495"
+    else:
+        probs = [w / total_w for w in weights]
+        prefix = rng.choices(prefixes, weights=probs, k=1)[0]
+
+    suffix = "".join(str(rng.randint(0, 9)) for _ in range(7))
+    msisdn = prefix + suffix
+
+    return Subscriber(
+        imsi="external",
+        msisdn=msisdn,
+        imei="00000000000000",
+        profile_name="external",
+        home_cell_id=0,
+        serving_ne_id="external",
+    )

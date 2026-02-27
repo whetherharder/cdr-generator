@@ -19,6 +19,7 @@ from cdr_generator.config.loader import (
     parse_override_strings,
     validate_config as _validate_config_fn,
 )
+from cdr_generator.engine.runner import run_generation
 from cdr_generator.writer.csv_writer import create_empty_output
 
 
@@ -125,13 +126,14 @@ def generate(
         cells, nes, subs = generate_all_assets(config)
         save_assets(assets_path, cells, nes, subs, config_hash)
 
+    stats = run_generation(config, dry_run=dry_run)
+
     if dry_run:
-        paths = create_empty_output(config, nes)
-        click.echo(f"Dry run: created {len(paths)} header-only files in {config.meta.output.path}/")
+        click.echo(f"Dry run: created {stats.files_written} header-only files in {config.meta.output.path}/")
         return
 
-    # Phase 2+ will implement actual CDR generation here
-    click.echo("Full generation not implemented yet (Phase 2). Use --dry-run for header-only output.")
+    click.echo(f"Generation complete: {stats.total_records} records in {stats.files_written} files")
+    click.echo(f"  Voice: {stats.voice_records}, SMS: {stats.sms_records}, Data: {stats.data_records}")
 
 
 @main.command()
