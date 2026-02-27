@@ -6,19 +6,24 @@ sampling, CDR generation, and output writing.
 
 from __future__ import annotations
 
-import random
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
+from cdr_generator.assets.contact_book import build_contact_book
+from cdr_generator.assets.external_numbers import generate_external_numbers
 from cdr_generator.assets.generator import generate_all_assets
 from cdr_generator.assets.models import Cell, NetworkElement, Subscriber
 from cdr_generator.config.models import CDRGeneratorConfig, SubscriberProfile
+from cdr_generator.engine.b_party import BPartyResult, select_b_party
+from cdr_generator.engine.mobility import resolve_position
 from cdr_generator.engine.poisson import sample_count
 from cdr_generator.engine.rates import effective_rate
+from cdr_generator.generators.extensions import generate_extensions
 from cdr_generator.models.cdr import CDRRecord
 from cdr_generator.writer.csv_writer import CsvWriter, create_empty_output
 
@@ -91,14 +96,13 @@ def run_generation(
 
     # Prepare numpy RNG for Poisson sampling and generators
     np_rng = np.random.default_rng(config.meta.seed)
-    py_rng = random.Random(config.meta.seed)
 
-    # Collect external number prefixes for b-party selection
-    ext_prefixes: list[str] = []
-    ext_weights: list[float] = []
-    for ep in config.subscribers.external_numbers.prefixes:
-        ext_prefixes.append(ep.prefix)
-        ext_weights.append(ep.weight)
+    # Phase 3: Build contact book and external number pool
+    contact_book_cfg = config.subscribers.contact_book.model_dump()
+    contact_book = build_contact_book(subscribers, contact_book_cfg, np_rng)
+
+    ext_numbers_cfg = config.subscribers.external_numbers.model_dump()
+    external_numbers = generate_external_numbers(ext_numbers_cfg, np_rng)
 
     # Time range
     start_dt = config.meta.time_range.start.replace(tzinfo=timezone.utc)
@@ -118,6 +122,9 @@ def run_generation(
     from cdr_generator.generators.sms import generate_sms_cdr
     from cdr_generator.generators.voice import generate_voice_cdr
 
+    # Vendor extension config lookup
+    vendor_ext_cfg = config.vendor_extensions
+
     current = start_dt
     while current <= end_dt:
         hour = current.hour
@@ -132,7 +139,17 @@ def run_generation(
             if home_cell is None:
                 continue
 
-            home_tac = home_cell.tac
+            # Phase 3: Resolve subscriber position using mobility model
+            first_cell_id, last_cell_id = resolve_position(
+                home_cell_id=sub.home_cell_id,
+                work_cell_id=sub.work_cell_id,
+                mobility=profile.mobility,
+                timestamp=current,
+                cells_by_id=cells_by_id,
+                rng=np_rng,
+            )
+            cell = cells_by_id.get(first_cell_id, home_cell)
+            home_tac = cell.tac
 
             # --- Voice MO ---
             mo_call_lambda = profile.daily_rates.mo_call.params.get("lambda", 0)
@@ -148,18 +165,30 @@ def run_generation(
             msc_ne = tac_to_ne["msc"].get(home_tac)
             if n_voice > 0 and msc_ne is not None:
                 for _ in range(n_voice):
-                    callee = _pick_b_party(sub, subscribers, ext_prefixes, ext_weights, py_rng)
+                    b_result = select_b_party(
+                        sub, contact_book, subscribers, external_numbers,
+                        contact_book_cfg, np_rng,
+                    )
+                    callee = _b_party_to_subscriber(b_result)
 
                     cdrs = generate_voice_cdr(
                         caller=sub,
                         callee=callee,
                         event_time=current,
-                        cell=home_cell,
+                        cell=cell,
                         msc=msc_ne,
                         voice_cfg=voice_cfg,
                         rng=np_rng,
                     )
                     for cdr in cdrs:
+                        # Apply mobility cell IDs
+                        if cdr.served_imsi == sub.imsi:
+                            cdr.first_cell_id = first_cell_id
+                            cdr.last_cell_id = last_cell_id
+                        # Apply vendor extensions
+                        _apply_vendor_extensions(
+                            cdr, msc_ne, vendor_ext_cfg, np_rng,
+                        )
                         ne_id = cdr.serving_ne_id
                         cdr_date = cdr.event_timestamp.date()
                         records_by_ne_date[(ne_id, cdr_date)].append(cdr)
@@ -180,18 +209,28 @@ def run_generation(
             smsc_ne = tac_to_ne["smsc"].get(home_tac)
             if n_sms > 0 and smsc_ne is not None:
                 for _ in range(n_sms):
-                    recipient = _pick_b_party(sub, subscribers, ext_prefixes, ext_weights, py_rng)
+                    b_result = select_b_party(
+                        sub, contact_book, subscribers, external_numbers,
+                        contact_book_cfg, np_rng,
+                    )
+                    recipient = _b_party_to_subscriber(b_result)
 
                     cdrs = generate_sms_cdr(
                         sender=sub,
                         recipient=recipient,
                         event_time=current,
-                        cell=home_cell,
+                        cell=cell,
                         smsc=smsc_ne,
                         sms_cfg=sms_cfg,
                         rng=np_rng,
                     )
                     for cdr in cdrs:
+                        if cdr.served_imsi == sub.imsi:
+                            cdr.first_cell_id = first_cell_id
+                            cdr.last_cell_id = last_cell_id
+                        _apply_vendor_extensions(
+                            cdr, smsc_ne, vendor_ext_cfg, np_rng,
+                        )
                         ne_id = cdr.serving_ne_id
                         cdr_date = cdr.event_timestamp.date()
                         records_by_ne_date[(ne_id, cdr_date)].append(cdr)
@@ -215,13 +254,20 @@ def run_generation(
                     cdrs = generate_data_cdr(
                         subscriber=sub,
                         event_time=current,
-                        cell=home_cell,
+                        cell=cell,
                         sgw=sgw_ne,
                         pgw=pgw_ne,
                         data_cfg=data_cfg,
                         rng=np_rng,
                     )
                     for cdr in cdrs:
+                        cdr.first_cell_id = first_cell_id
+                        cdr.last_cell_id = last_cell_id
+                        serving_ne = nes_by_id.get(cdr.serving_ne_id)
+                        if serving_ne is not None:
+                            _apply_vendor_extensions(
+                                cdr, serving_ne, vendor_ext_cfg, np_rng,
+                            )
                         ne_id = cdr.serving_ne_id
                         cdr_date = cdr.event_timestamp.date()
                         records_by_ne_date[(ne_id, cdr_date)].append(cdr)
@@ -254,54 +300,46 @@ def run_generation(
     return stats
 
 
-def _pick_b_party(
-    a_party: Subscriber,
-    all_subscribers: list[Subscriber],
-    ext_prefixes: list[str],
-    ext_weights: list[float],
-    rng: random.Random,
-) -> Subscriber:
-    """Select a B-party: 75% random subscriber, 25% external number.
+def _b_party_to_subscriber(b_result: BPartyResult) -> Subscriber:
+    """Convert a BPartyResult to a Subscriber for use in generators."""
+    if b_result.subscriber is not None:
+        return b_result.subscriber
 
-    For Phase 2, external numbers are represented as a synthetic Subscriber
-    with a generated MSISDN from the configured prefixes.
-    """
-    if rng.random() < 0.25 and ext_prefixes:
-        return _generate_external_subscriber(ext_prefixes, ext_weights, rng)
-
-    # Pick a random subscriber (different from A-party if possible)
-    if len(all_subscribers) <= 1:
-        return all_subscribers[0]
-
-    candidate = a_party
-    for _ in range(10):
-        candidate = rng.choice(all_subscribers)
-        if candidate.imsi != a_party.imsi:
-            break
-    return candidate
-
-
-def _generate_external_subscriber(
-    prefixes: list[str],
-    weights: list[float],
-    rng: random.Random,
-) -> Subscriber:
-    """Create a synthetic Subscriber representing an external number."""
-    total_w = sum(weights)
-    if total_w <= 0:
-        prefix = prefixes[0] if prefixes else "+7495"
-    else:
-        probs = [w / total_w for w in weights]
-        prefix = rng.choices(prefixes, weights=probs, k=1)[0]
-
-    suffix = "".join(str(rng.randint(0, 9)) for _ in range(7))
-    msisdn = prefix + suffix
-
+    # External number: create a synthetic Subscriber
     return Subscriber(
-        imsi="external",
-        msisdn=msisdn,
+        imsi=b_result.imsi,
+        msisdn=b_result.msisdn,
         imei="00000000000000",
         profile_name="external",
         home_cell_id=0,
         serving_ne_id="external",
     )
+
+
+def _apply_vendor_extensions(
+    cdr: CDRRecord,
+    ne: NetworkElement,
+    vendor_ext_cfg: dict[str, Any],
+    rng: np.random.Generator,
+) -> None:
+    """Apply vendor-specific extensions to a CDR record."""
+    if not vendor_ext_cfg:
+        return
+
+    ext_cfg = vendor_ext_cfg.get(ne.vendor)
+    if ext_cfg is None:
+        return
+
+    event_ctx = {
+        "first_cell_id": cdr.first_cell_id,
+        "last_cell_id": cdr.last_cell_id,
+        "apn": cdr.apn,
+    }
+    ext = generate_extensions(
+        vendor=ne.vendor,
+        vendor_config=ext_cfg,
+        event_context=event_ctx,
+        rng=rng,
+    )
+    if ext is not None:
+        cdr.vendor_extensions = ext
