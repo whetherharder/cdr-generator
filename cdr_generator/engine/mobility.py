@@ -32,6 +32,7 @@ def resolve_position(
     timestamp: datetime,
     cells_by_id: dict[int, Cell],
     rng: np.random.Generator,
+    all_cell_ids: list[int] | None = None,
 ) -> tuple[int, int]:
     """Determine the subscriber's cell position at a given time.
 
@@ -61,6 +62,9 @@ def resolve_position(
         Lookup map of all cells.
     rng:
         Numpy random generator.
+    all_cell_ids:
+        Pre-computed list of all cell IDs (for roaming).  When provided,
+        avoids repeated ``list(cells_by_id.keys())`` calls.
 
     Returns
     -------
@@ -70,7 +74,8 @@ def resolve_position(
     # Check roaming first
     roaming_prob = mobility.roaming_probability
     if roaming_prob > 0 and float(rng.random()) < roaming_prob:
-        all_cell_ids = list(cells_by_id.keys())
+        if all_cell_ids is None:
+            all_cell_ids = list(cells_by_id.keys())
         if all_cell_ids:
             idx = int(rng.integers(0, len(all_cell_ids)))
             first_cell = all_cell_ids[idx]

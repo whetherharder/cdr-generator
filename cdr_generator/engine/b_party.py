@@ -48,6 +48,7 @@ def select_b_party(
     external_numbers: list[ExternalNumber],
     config: dict,
     rng: np.random.Generator,
+    sub_by_imsi: dict[str, Subscriber] | None = None,
 ) -> BPartyResult:
     """Select a B-party for the given A-party.
 
@@ -72,6 +73,10 @@ def select_b_party(
         external_call_ratio.
     rng:
         Numpy random generator.
+    sub_by_imsi:
+        Pre-built IMSI-to-subscriber lookup.  When provided, avoids
+        rebuilding the dict on every call (significant when called
+        thousands of times in the main generation loop).
 
     Returns
     -------
@@ -81,7 +86,8 @@ def select_b_party(
     external_ratio = config.get("external_call_ratio", 0.15)
     repeat_prob = config.get("repeat_call_probability", 0.6)
 
-    sub_by_imsi = {s.imsi: s for s in subscribers}
+    if sub_by_imsi is None:
+        sub_by_imsi = {s.imsi: s for s in subscribers}
 
     roll = float(rng.random())
 

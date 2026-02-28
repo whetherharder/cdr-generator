@@ -21,7 +21,6 @@ from cdr_generator.assets.models import NetworkElement, Subscriber
 from cdr_generator.config.models import CDRGeneratorConfig
 from cdr_generator.engine.anomalies import AnomalyPipeline, AnomalyStats
 from cdr_generator.engine.b_party import BPartyResult, select_b_party
-from cdr_generator.engine.concurrency import enforce_concurrency
 from cdr_generator.engine.mobility import resolve_position
 from cdr_generator.engine.poisson import sample_count
 from cdr_generator.engine.rates import effective_rate
@@ -69,7 +68,6 @@ def run_generation(
     # Build lookup structures
     cells_by_id = {c.cell_id: c for c in cells}
     nes_by_id = {ne.id: ne for ne in network_elements}
-    profiles_by_name = {p.name: p for p in config.subscribers.profiles}
 
     # Build NE lookup maps by TAC and type
     tac_to_ne: dict[str, dict[int, NetworkElement]] = {
@@ -145,6 +143,97 @@ def run_generation(
     # Vendor extension config lookup
     vendor_ext_cfg = config.vendor_extensions
 
+    # ------------------------------------------------------------------
+    # PERFORMANCE: Pre-compute per-profile data outside the time loop
+    # ------------------------------------------------------------------
+    # For each profile, cache the rate parameters so we avoid repeated
+    # Pydantic attribute traversals and dict lookups in the inner loop.
+
+    class _ProfileCache:
+        """Holds pre-computed profile data for the inner loop."""
+
+        __slots__ = (
+            "voice_lambda",
+            "sms_lambda",
+            "data_lambda",
+            "voice_weights",
+            "sms_weights",
+            "data_weights",
+            "voice_dow",
+            "sms_dow",
+            "data_dow",
+            "voice_weight_sum",
+            "sms_weight_sum",
+            "data_weight_sum",
+            "mobility",
+        )
+
+    profile_cache: dict[str, _ProfileCache] = {}
+    for p in config.subscribers.profiles:
+        pc = _ProfileCache()
+        pc.voice_lambda = p.daily_rates.mo_call.params.get("lambda", 0)
+        pc.sms_lambda = p.daily_rates.mo_sms.params.get("lambda", 0)
+        pc.data_lambda = p.daily_rates.data_session.params.get("lambda", 0)
+        pc.voice_weights = p.hourly_weights.voice
+        pc.sms_weights = p.hourly_weights.sms
+        pc.data_weights = p.hourly_weights.data
+        pc.voice_dow = p.day_of_week_multipliers.voice
+        pc.sms_dow = p.day_of_week_multipliers.sms
+        pc.data_dow = p.day_of_week_multipliers.data
+        pc.voice_weight_sum = sum(pc.voice_weights)
+        pc.sms_weight_sum = sum(pc.sms_weights)
+        pc.data_weight_sum = sum(pc.data_weights)
+        pc.mobility = p.mobility
+        profile_cache[p.name] = pc
+
+    # PERFORMANCE: Pre-compute subscriber->profile_cache mapping and
+    # validate home_cell existence once, filtering invalid subscribers.
+    sub_profile_pairs: list[tuple[Subscriber, _ProfileCache]] = []
+    for sub in subscribers:
+        pc = profile_cache.get(sub.profile_name)
+        if pc is None:
+            continue
+        home_cell = cells_by_id.get(sub.home_cell_id)
+        if home_cell is None:
+            continue
+        sub_profile_pairs.append((sub, pc))
+
+    # PERFORMANCE: Pre-build IMSI lookup for b_party (avoids rebuilding
+    # the dict on every select_b_party call).
+    sub_by_imsi: dict[str, Subscriber] = {s.imsi: s for s in subscribers}
+
+    # PERFORMANCE: Pre-compute cell ID list for mobility roaming.
+    all_cell_ids = list(cells_by_id.keys())
+
+    # PERFORMANCE: Extract concurrency limits as plain ints to avoid
+    # Pydantic attribute access per subscriber per timestep.
+    _conc = config.events.concurrency
+    conc_max_voice = _conc.max_voice
+    conc_max_sms = _conc.max_sms
+    conc_max_data = _conc.max_data
+
+    # PERFORMANCE: Pre-compute per-profile data config with volume
+    # multipliers applied (avoids repeated dict copy in inner loop).
+    vol_mults = data_cfg.get("profile_volume_multipliers", {})
+    data_cfg_by_profile: dict[str, dict] = {}
+    for pname, pc in profile_cache.items():
+        if pname in vol_mults:
+            mult = vol_mults[pname]
+            cfg_copy = dict(data_cfg)
+            cfg_copy["_volume_multiplier_uplink"] = mult.get("uplink", 1.0)
+            cfg_copy["_volume_multiplier_downlink"] = mult.get("downlink", 1.0)
+            data_cfg_by_profile[pname] = cfg_copy
+        else:
+            data_cfg_by_profile[pname] = data_cfg
+
+    # PERFORMANCE: Alias tac_to_ne sub-dicts for direct access.
+    msc_by_tac = tac_to_ne["msc"]
+    smsc_by_tac = tac_to_ne["smsc"]
+    sgw_by_tac = tac_to_ne["sgw"]
+
+    # Cache timedelta for step advancement
+    _step_delta = timedelta(seconds=step_seconds)
+
     current = start_dt
     while current <= end_dt:
         hour = current.hour
@@ -159,11 +248,13 @@ def run_generation(
             step_voice_cfg = dict(voice_cfg)
             step_voice_cfg["success_rate"] = 1.0 - effects.voice_failure_rate_override
 
-        for sub in subscribers:
-            profile = profiles_by_name.get(sub.profile_name)
-            if profile is None:
-                continue
+        # Cache special event multipliers for this time step
+        voice_mult = effects.voice_rate_multiplier
+        sms_mult = effects.sms_rate_multiplier
+        data_mult = effects.data_rate_multiplier
+        has_disabled_cells = len(effects.disabled_cells) > 0
 
+        for sub, pc in sub_profile_pairs:
             home_cell = cells_by_id.get(sub.home_cell_id)
             if home_cell is None:
                 continue
@@ -172,16 +263,17 @@ def run_generation(
             first_cell_id, last_cell_id = resolve_position(
                 home_cell_id=sub.home_cell_id,
                 work_cell_id=sub.work_cell_id,
-                mobility=profile.mobility,
+                mobility=pc.mobility,
                 timestamp=current,
                 cells_by_id=cells_by_id,
                 rng=np_rng,
+                all_cell_ids=all_cell_ids,
             )
             cell = cells_by_id.get(first_cell_id, home_cell)
 
             # Phase 4/5: Handle disabled cells — relocate to overflow or
             # generate a failed CDR with cause_code=38
-            if effects.is_cell_disabled(first_cell_id):
+            if has_disabled_cells and effects.is_cell_disabled(first_cell_id):
                 overflow_cell_id = effects.pick_overflow_cell(np_rng)
                 if overflow_cell_id is not None:
                     overflow_cell = cells_by_id.get(overflow_cell_id)
@@ -193,7 +285,7 @@ def run_generation(
                         continue  # overflow cell not found, skip subscriber
                 else:
                     # Phase 5: No overflow — generate failed CDR with cause_code=38
-                    msc_ne = tac_to_ne["msc"].get(home_cell.tac)
+                    msc_ne = msc_by_tac.get(home_cell.tac)
                     if msc_ne is not None:
                         failed_cdr = CDRRecord(
                             record_type="mo_call",
@@ -219,50 +311,54 @@ def run_generation(
 
             home_tac = cell.tac
 
-            # --- Compute event counts ---
-            mo_call_lambda = profile.daily_rates.mo_call.params.get("lambda", 0)
+            # --- Compute event counts (using cached profile data) ---
             voice_rate = effective_rate(
-                base_lambda=mo_call_lambda,
-                hourly_weights=profile.hourly_weights.voice,
-                dow_multipliers=profile.day_of_week_multipliers.voice,
+                base_lambda=pc.voice_lambda,
+                hourly_weights=pc.voice_weights,
+                dow_multipliers=pc.voice_dow,
                 hour=hour,
                 dow=dow,
                 time_step_seconds=step_seconds,
+                weight_sum=pc.voice_weight_sum,
             )
-            voice_rate *= effects.voice_rate_multiplier
+            voice_rate *= voice_mult
             n_voice = sample_count(voice_rate, np_rng)
 
-            mo_sms_lambda = profile.daily_rates.mo_sms.params.get("lambda", 0)
             sms_rate = effective_rate(
-                base_lambda=mo_sms_lambda,
-                hourly_weights=profile.hourly_weights.sms,
-                dow_multipliers=profile.day_of_week_multipliers.sms,
+                base_lambda=pc.sms_lambda,
+                hourly_weights=pc.sms_weights,
+                dow_multipliers=pc.sms_dow,
                 hour=hour,
                 dow=dow,
                 time_step_seconds=step_seconds,
+                weight_sum=pc.sms_weight_sum,
             )
-            sms_rate *= effects.sms_rate_multiplier
+            sms_rate *= sms_mult
             n_sms = sample_count(sms_rate, np_rng)
 
-            data_lambda = profile.daily_rates.data_session.params.get("lambda", 0)
             data_rate = effective_rate(
-                base_lambda=data_lambda,
-                hourly_weights=profile.hourly_weights.data,
-                dow_multipliers=profile.day_of_week_multipliers.data,
+                base_lambda=pc.data_lambda,
+                hourly_weights=pc.data_weights,
+                dow_multipliers=pc.data_dow,
                 hour=hour,
                 dow=dow,
                 time_step_seconds=step_seconds,
+                weight_sum=pc.data_weight_sum,
             )
-            data_rate *= effects.data_rate_multiplier
+            data_rate *= data_mult
             n_data = sample_count(data_rate, np_rng)
 
-            # Phase 5: Apply concurrency limits
-            n_voice, n_sms, n_data = enforce_concurrency(
-                n_voice, n_sms, n_data, config.events.concurrency
-            )
+            # Phase 5: Apply concurrency limits (inlined to avoid
+            # Pydantic attribute access per subscriber per timestep)
+            if conc_max_voice is not None and n_voice > conc_max_voice:
+                n_voice = conc_max_voice
+            if conc_max_sms is not None and n_sms > conc_max_sms:
+                n_sms = conc_max_sms
+            if conc_max_data is not None and n_data > conc_max_data:
+                n_data = conc_max_data
 
             # --- Voice MO ---
-            msc_ne = tac_to_ne["msc"].get(home_tac)
+            msc_ne = msc_by_tac.get(home_tac)
             if n_voice > 0 and msc_ne is not None:
                 for _ in range(n_voice):
                     b_result = select_b_party(
@@ -272,6 +368,7 @@ def run_generation(
                         external_numbers,
                         contact_book_cfg,
                         np_rng,
+                        sub_by_imsi,
                     )
                     callee = _b_party_to_subscriber(b_result)
 
@@ -284,6 +381,7 @@ def run_generation(
                         external_numbers,
                         contact_book_cfg,
                         np_rng,
+                        sub_by_imsi,
                     )
                     fwd_sub = _b_party_to_subscriber(fwd_b_result)
                     if fwd_sub.imsi != callee.imsi:
@@ -318,7 +416,7 @@ def run_generation(
                         stats.total_records += 1
 
             # --- SMS MO ---
-            smsc_ne = tac_to_ne["smsc"].get(home_tac)
+            smsc_ne = smsc_by_tac.get(home_tac)
             if n_sms > 0 and smsc_ne is not None:
                 for _ in range(n_sms):
                     b_result = select_b_party(
@@ -328,6 +426,7 @@ def run_generation(
                         external_numbers,
                         contact_book_cfg,
                         np_rng,
+                        sub_by_imsi,
                     )
                     recipient = _b_party_to_subscriber(b_result)
 
@@ -357,18 +456,9 @@ def run_generation(
                         stats.total_records += 1
 
             # --- Data session ---
-            sgw_ne = tac_to_ne["sgw"].get(home_tac)
+            sgw_ne = sgw_by_tac.get(home_tac)
             if n_data > 0 and sgw_ne is not None and pgw_ne is not None:
-                # Apply profile volume multipliers if configured
-                step_data_cfg = data_cfg
-                vol_mults = data_cfg.get("profile_volume_multipliers", {})
-                if sub.profile_name in vol_mults:
-                    mult = vol_mults[sub.profile_name]
-                    step_data_cfg = dict(data_cfg)
-                    step_data_cfg["_volume_multiplier_uplink"] = mult.get("uplink", 1.0)
-                    step_data_cfg["_volume_multiplier_downlink"] = mult.get(
-                        "downlink", 1.0
-                    )
+                step_data_cfg = data_cfg_by_profile[sub.profile_name]
 
                 for _ in range(n_data):
                     cdrs = generate_data_cdr(
@@ -397,7 +487,7 @@ def run_generation(
                         stats.data_records += 1
                         stats.total_records += 1
 
-        current += timedelta(seconds=step_seconds)
+        current += _step_delta
 
     # Phase 4: Apply anomaly pipeline to all records before writing
     combined_anomaly_stats = AnomalyStats()
