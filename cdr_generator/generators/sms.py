@@ -114,7 +114,7 @@ def _pick_sms_failure_cause(sms_cfg: dict, rng: np.random.Generator) -> int:
         return 1  # default generic failure
 
     weights = [c["weight"] for c in causes]
-    idx = _weighted_choice(weights, rng)
+    _weighted_choice(weights, rng)  # consume RNG for determinism
     # SMS failure causes typically don't have numeric codes in config,
     # use a default absent_subscriber code
     return 1

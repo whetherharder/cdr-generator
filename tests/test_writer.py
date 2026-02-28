@@ -45,7 +45,7 @@ def _read_gz_csv_rows(path: pathlib.Path) -> list[list[str]]:
     """Read CSV rows from gzip, skipping comment lines."""
     with gzip.open(path, "rt", encoding="utf-8", newline="") as f:
         lines = f.readlines()
-    data_lines = [l for l in lines if not l.startswith("#")]
+    data_lines = [line for line in lines if not line.startswith("#")]
     reader = csv.reader(data_lines)
     return list(reader)
 
@@ -384,7 +384,7 @@ class TestCsvWriterDelimiter:
 
         file_path = tmp_output_dir / "msc-01" / "CDR_msc-01_20250101.csv.gz"
         lines = _read_gz_lines(file_path)
-        header_line = next(l for l in lines if not l.startswith("#"))
+        header_line = next(line for line in lines if not line.startswith("#"))
         assert "|" in header_line
         fields = header_line.strip().split("|")
         assert len(fields) == len(CDR_FIELDS)
@@ -455,7 +455,7 @@ class TestCSVWriterLowLevel:
         writer = CSVWriter(output_dir=tmp_output_dir, delimiter=";")
         path = writer.write_header("msc-01", "20250101")
         lines = _read_gz_lines(path)
-        header_line = next(l for l in lines if not l.startswith("#"))
+        header_line = next(line for line in lines if not line.startswith("#"))
         assert ";" in header_line
 
 

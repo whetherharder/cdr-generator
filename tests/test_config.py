@@ -23,10 +23,9 @@ Acceptance criteria from plan.md Phase 1:
 
 import copy
 import pathlib
-from typing import Any, Callable
+from typing import Callable
 
 import pytest
-import yaml
 from pydantic import ValidationError
 
 from cdr_generator.config.models import (

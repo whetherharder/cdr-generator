@@ -15,7 +15,6 @@ import numpy as np
 import pytest
 
 from cdr_generator.assets.models import Cell, NetworkElement, Subscriber
-from cdr_generator.models.cdr import CDRRecord
 
 
 # ---------------------------------------------------------------------------

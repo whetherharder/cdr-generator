@@ -15,9 +15,6 @@ import pytest
 from cdr_generator.assets.models import AssetManifest, Cell, NetworkElement, Subscriber
 from cdr_generator.assets.generator import (
     generate_all_assets,
-    generate_cells,
-    generate_network_elements,
-    generate_subscribers,
 )
 from cdr_generator.assets.store import (
     compute_config_hash,

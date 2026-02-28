@@ -8,12 +8,10 @@ Phase 2 acceptance criteria:
 
 from __future__ import annotations
 
-import copy
 import csv
 import gzip
 import pathlib
 from collections import Counter
-from datetime import datetime, timezone
 
 import pytest
 import yaml

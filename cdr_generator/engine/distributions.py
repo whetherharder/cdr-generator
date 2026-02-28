@@ -6,7 +6,6 @@ with optional min/max clamping.
 
 from __future__ import annotations
 
-import math
 
 import numpy as np
 

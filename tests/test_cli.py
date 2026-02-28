@@ -273,7 +273,6 @@ class TestGenerateCommand:
         sample_config_path: pathlib.Path,
         tmp_path: pathlib.Path,
     ) -> None:
-        import csv
         import gzip
 
         output_dir = tmp_path / "output"
@@ -295,7 +294,7 @@ class TestGenerateCommand:
         for gz_file in gz_files:
             with gzip.open(gz_file, "rt", encoding="utf-8") as f:
                 lines = f.readlines()
-            data_lines = [l for l in lines if not l.startswith("#")]
+            data_lines = [line for line in lines if not line.startswith("#")]
             assert len(data_lines) == 1, (
                 f"File {gz_file.name} has {len(data_lines)} data lines, expected 1 (header only)"
             )
