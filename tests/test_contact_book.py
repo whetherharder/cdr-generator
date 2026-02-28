@@ -19,6 +19,7 @@ from cdr_generator.assets.models import Subscriber
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def _make_subscribers(n: int, profiles: list[str] | None = None) -> list[Subscriber]:
     """Create n test subscribers with rotating profiles."""
     if profiles is None:
@@ -54,7 +55,10 @@ def contact_book_config() -> dict:
     """Standard contact book configuration dict."""
     return {
         "avg_contacts": 15,
-        "degree_distribution": {"type": "zipf", "params": {"a": 2.0, "min": 3, "max": 100}},
+        "degree_distribution": {
+            "type": "zipf",
+            "params": {"a": 2.0, "min": 3, "max": 100},
+        },
         "asymmetric": True,
         "intra_profile_bias": 1.5,
         "repeat_call_probability": 0.6,
@@ -71,17 +75,22 @@ def rng() -> np.random.Generator:
 # Contact book generation
 # ===================================================================
 
+
 class TestContactBookCreation:
     """Contact book builds a contact graph for all subscribers."""
 
-    def test_returns_dict_mapping(self, subscribers_50, contact_book_config, rng) -> None:
+    def test_returns_dict_mapping(
+        self, subscribers_50, contact_book_config, rng
+    ) -> None:
         from cdr_generator.assets.contact_book import build_contact_book
 
         book = build_contact_book(subscribers_50, contact_book_config, rng)
         assert isinstance(book, dict)
         assert len(book) == len(subscribers_50)
 
-    def test_every_subscriber_has_contacts(self, subscribers_50, contact_book_config, rng) -> None:
+    def test_every_subscriber_has_contacts(
+        self, subscribers_50, contact_book_config, rng
+    ) -> None:
         from cdr_generator.assets.contact_book import build_contact_book
 
         book = build_contact_book(subscribers_50, contact_book_config, rng)
@@ -100,7 +109,9 @@ class TestContactBookCreation:
                 f"Subscriber {sub.imsi} must not be in their own contact book"
             )
 
-    def test_contacts_are_valid_subscribers(self, subscribers_50, contact_book_config, rng) -> None:
+    def test_contacts_are_valid_subscribers(
+        self, subscribers_50, contact_book_config, rng
+    ) -> None:
         from cdr_generator.assets.contact_book import build_contact_book
 
         book = build_contact_book(subscribers_50, contact_book_config, rng)
@@ -116,8 +127,12 @@ class TestContactBookDeterministic:
     def test_same_seed_same_result(self, subscribers_50, contact_book_config) -> None:
         from cdr_generator.assets.contact_book import build_contact_book
 
-        book1 = build_contact_book(subscribers_50, contact_book_config, np.random.default_rng(99))
-        book2 = build_contact_book(subscribers_50, contact_book_config, np.random.default_rng(99))
+        book1 = build_contact_book(
+            subscribers_50, contact_book_config, np.random.default_rng(99)
+        )
+        book2 = build_contact_book(
+            subscribers_50, contact_book_config, np.random.default_rng(99)
+        )
 
         for sub in subscribers_50:
             assert book1[sub.imsi] == book2[sub.imsi], (
@@ -129,9 +144,11 @@ class TestContactBookDeterministic:
 # Zipf degree distribution
 # ===================================================================
 
-class TestZipfDegreeDistribution:
 
-    def test_degree_respects_min_max(self, subscribers_200, contact_book_config, rng) -> None:
+class TestZipfDegreeDistribution:
+    def test_degree_respects_min_max(
+        self, subscribers_200, contact_book_config, rng
+    ) -> None:
         from cdr_generator.assets.contact_book import build_contact_book
 
         book = build_contact_book(subscribers_200, contact_book_config, rng)
@@ -148,7 +165,9 @@ class TestZipfDegreeDistribution:
                 f"Subscriber {sub.imsi} degree {degree} > effective_max {effective_max}"
             )
 
-    def test_degree_distribution_has_variance(self, subscribers_200, contact_book_config, rng) -> None:
+    def test_degree_distribution_has_variance(
+        self, subscribers_200, contact_book_config, rng
+    ) -> None:
         from cdr_generator.assets.contact_book import build_contact_book
 
         book = build_contact_book(subscribers_200, contact_book_config, rng)
@@ -157,7 +176,9 @@ class TestZipfDegreeDistribution:
             "Zipf distribution should produce multiple distinct degree values"
         )
 
-    def test_most_subscribers_have_few_contacts(self, subscribers_200, contact_book_config, rng) -> None:
+    def test_most_subscribers_have_few_contacts(
+        self, subscribers_200, contact_book_config, rng
+    ) -> None:
         from cdr_generator.assets.contact_book import build_contact_book
 
         book = build_contact_book(subscribers_200, contact_book_config, rng)
@@ -173,8 +194,8 @@ class TestZipfDegreeDistribution:
 # Asymmetric contacts
 # ===================================================================
 
-class TestAsymmetricContacts:
 
+class TestAsymmetricContacts:
     def test_asymmetry_exists(self, subscribers_200, contact_book_config, rng) -> None:
         from cdr_generator.assets.contact_book import build_contact_book
 
@@ -195,7 +216,10 @@ class TestAsymmetricContacts:
         from cdr_generator.assets.contact_book import build_contact_book
 
         config = {
-            "degree_distribution": {"type": "zipf", "params": {"a": 2.0, "min": 3, "max": 100}},
+            "degree_distribution": {
+                "type": "zipf",
+                "params": {"a": 2.0, "min": 3, "max": 100},
+            },
             "asymmetric": False,
             "intra_profile_bias": 1.5,
         }
@@ -212,13 +236,16 @@ class TestAsymmetricContacts:
 # Intra-profile bias
 # ===================================================================
 
-class TestIntraProfileBias:
 
+class TestIntraProfileBias:
     def test_bias_increases_same_profile_contacts(self, subscribers_200) -> None:
         from cdr_generator.assets.contact_book import build_contact_book
 
         config = {
-            "degree_distribution": {"type": "zipf", "params": {"a": 2.0, "min": 3, "max": 100}},
+            "degree_distribution": {
+                "type": "zipf",
+                "params": {"a": 2.0, "min": 3, "max": 100},
+            },
             "asymmetric": True,
             "intra_profile_bias": 2.0,
         }
@@ -245,7 +272,10 @@ class TestIntraProfileBias:
         from cdr_generator.assets.contact_book import build_contact_book
 
         config = {
-            "degree_distribution": {"type": "zipf", "params": {"a": 2.0, "min": 3, "max": 100}},
+            "degree_distribution": {
+                "type": "zipf",
+                "params": {"a": 2.0, "min": 3, "max": 100},
+            },
             "asymmetric": True,
             "intra_profile_bias": 1.0,
         }

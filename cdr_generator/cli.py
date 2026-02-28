@@ -30,7 +30,13 @@ def main() -> None:
 
 
 @main.command()
-@click.option("--config", "config_path", required=True, type=click.Path(exists=True), help="Path to YAML config file.")
+@click.option(
+    "--config",
+    "config_path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to YAML config file.",
+)
 def validate_config(config_path: str) -> None:
     """Validate a YAML config file against the JSON schema."""
     errors = _validate_config_fn(Path(config_path))
@@ -42,8 +48,19 @@ def validate_config(config_path: str) -> None:
 
 
 @main.command()
-@click.option("--config", "config_path", required=True, type=click.Path(exists=True), help="Path to YAML config file.")
-@click.option("--assets-dir", default="./assets", type=click.Path(), help="Directory for generated assets.")
+@click.option(
+    "--config",
+    "config_path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to YAML config file.",
+)
+@click.option(
+    "--assets-dir",
+    default="./assets",
+    type=click.Path(),
+    help="Directory for generated assets.",
+)
 def generate_assets(config_path: str, assets_dir: str) -> None:
     """Generate cells, network elements, and subscribers from config."""
     cfg_path = Path(config_path)
@@ -56,12 +73,19 @@ def generate_assets(config_path: str, assets_dir: str) -> None:
     config_hash = compute_config_hash(cfg_path)
     save_assets(Path(assets_dir), cells, nes, subs, config_hash)
 
-    click.echo(f"Assets generated: {len(cells)} cells, {len(nes)} NEs, {len(subs)} subscribers")
+    click.echo(
+        f"Assets generated: {len(cells)} cells, {len(nes)} NEs, {len(subs)} subscribers"
+    )
     click.echo(f"Saved to {assets_dir}/")
 
 
 @main.command()
-@click.option("--assets-dir", default="./assets", type=click.Path(exists=True), help="Directory with generated assets.")
+@click.option(
+    "--assets-dir",
+    default="./assets",
+    type=click.Path(exists=True),
+    help="Directory with generated assets.",
+)
 def validate_assets(assets_dir: str) -> None:
     """Validate generated assets for referential integrity."""
     try:
@@ -83,13 +107,33 @@ def validate_assets(assets_dir: str) -> None:
 
 
 @main.command()
-@click.option("--config", "config_path", required=True, type=click.Path(exists=True), help="Path to YAML config file.")
-@click.option("--assets-dir", default="./assets", type=click.Path(), help="Directory with generated assets.")
-@click.option("--output-dir", default=None, type=click.Path(), help="Output directory for CDR files (default: from config).")
+@click.option(
+    "--config",
+    "config_path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to YAML config file.",
+)
+@click.option(
+    "--assets-dir",
+    default="./assets",
+    type=click.Path(),
+    help="Directory with generated assets.",
+)
+@click.option(
+    "--output-dir",
+    default=None,
+    type=click.Path(),
+    help="Output directory for CDR files (default: from config).",
+)
 @click.option("--workers", default=1, type=int, help="Number of generator workers.")
 @click.option("--dry-run", is_flag=True, help="Write CSV headers only, no records.")
 @click.option("--progress", is_flag=True, help="Show progress bar.")
-@click.option("--override", multiple=True, help="Dot-path config override (e.g. subscribers.total_count=100).")
+@click.option(
+    "--override",
+    multiple=True,
+    help="Dot-path config override (e.g. subscribers.total_count=100).",
+)
 def generate(
     config_path: str,
     assets_dir: str,
@@ -119,7 +163,9 @@ def generate(
     if assets_path.exists() and (assets_path / "manifest.json").exists():
         cells, nes, subs, manifest = load_assets(assets_path)
         if manifest.config_hash != config_hash:
-            click.echo("Config changed since last asset generation. Regenerating...", err=True)
+            click.echo(
+                "Config changed since last asset generation. Regenerating...", err=True
+            )
             cells, nes, subs = generate_all_assets(config)
             save_assets(assets_path, cells, nes, subs, config_hash)
     else:
@@ -129,15 +175,27 @@ def generate(
     stats = run_generation(config, dry_run=dry_run)
 
     if dry_run:
-        click.echo(f"Dry run: created {stats.files_written} header-only files in {config.meta.output.path}/")
+        click.echo(
+            f"Dry run: created {stats.files_written} header-only files in {config.meta.output.path}/"
+        )
         return
 
-    click.echo(f"Generation complete: {stats.total_records} records in {stats.files_written} files")
-    click.echo(f"  Voice: {stats.voice_records}, SMS: {stats.sms_records}, Data: {stats.data_records}")
+    click.echo(
+        f"Generation complete: {stats.total_records} records in {stats.files_written} files"
+    )
+    click.echo(
+        f"  Voice: {stats.voice_records}, SMS: {stats.sms_records}, Data: {stats.data_records}"
+    )
 
 
 @main.command()
-@click.option("--config", "config_path", required=True, type=click.Path(exists=True), help="Path to YAML config file.")
+@click.option(
+    "--config",
+    "config_path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to YAML config file.",
+)
 def estimate(config_path: str) -> None:
     """Estimate CDR volume and anomaly breakdown."""
     click.echo("Estimate not implemented yet (Phase 4).")

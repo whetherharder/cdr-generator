@@ -75,13 +75,21 @@ class TestSampleCountDistribution:
 
     def test_different_seeds_different_results(self) -> None:
         """Different RNG seeds should produce different sequences."""
-        counts_a = [sample_count(rate=3.0, rng=np.random.default_rng(1)) for _ in range(100)]
-        counts_b = [sample_count(rate=3.0, rng=np.random.default_rng(2)) for _ in range(100)]
+        counts_a = [
+            sample_count(rate=3.0, rng=np.random.default_rng(1)) for _ in range(100)
+        ]
+        counts_b = [
+            sample_count(rate=3.0, rng=np.random.default_rng(2)) for _ in range(100)
+        ]
         # Not all identical (extremely unlikely to be identical by chance)
         assert counts_a != counts_b
 
     def test_same_seed_reproducible(self) -> None:
         """Same RNG seed should produce identical sequence."""
-        counts_a = [sample_count(rate=3.0, rng=np.random.default_rng(42)) for _ in range(100)]
-        counts_b = [sample_count(rate=3.0, rng=np.random.default_rng(42)) for _ in range(100)]
+        counts_a = [
+            sample_count(rate=3.0, rng=np.random.default_rng(42)) for _ in range(100)
+        ]
+        counts_b = [
+            sample_count(rate=3.0, rng=np.random.default_rng(42)) for _ in range(100)
+        ]
         assert counts_a == counts_b

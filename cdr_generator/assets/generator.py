@@ -23,7 +23,9 @@ def generate_cells(config: CDRGeneratorConfig, rng: random.Random) -> list[Cell]
         raise NotImplementedError("auto_generate cells is not implemented in Phase 1")
 
     if network.cells.source == "file":
-        raise NotImplementedError("file-based cell source is not implemented in Phase 1")
+        raise NotImplementedError(
+            "file-based cell source is not implemented in Phase 1"
+        )
 
     # inline source
     cells: list[Cell] = []
@@ -261,13 +263,9 @@ def _luhn_check_digit(number_str: str) -> int:
     return (10 - (total % 10)) % 10
 
 
-def _resolve_serving_ne(
-    tac: int, tac_to_ne: dict[int, str], cell_id: int
-) -> str:
+def _resolve_serving_ne(tac: int, tac_to_ne: dict[int, str], cell_id: int) -> str:
     """Look up the serving NE for a given TAC, raising on missing mapping."""
     ne_id = tac_to_ne.get(tac)
     if ne_id is None:
-        raise ValueError(
-            f"No network element serves TAC {tac} (home cell {cell_id})"
-        )
+        raise ValueError(f"No network element serves TAC {tac} (home cell {cell_id})")
     return ne_id

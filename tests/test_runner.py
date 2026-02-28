@@ -30,6 +30,7 @@ SAMPLE_CONFIG_PATH = REPO_ROOT / "cdr_generator_config.yaml"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_small_config(tmp_path: pathlib.Path) -> pathlib.Path:
     """Create a minimal config for fast test runs: 1 day, 50 subscribers."""
     with open(SAMPLE_CONFIG_PATH) as f:
@@ -78,6 +79,7 @@ def _collect_all_records(output_dir: pathlib.Path) -> list[dict[str, str]]:
 # Tests: dry run
 # ---------------------------------------------------------------------------
 
+
 class TestDryRunCreatesFiles:
     """--dry-run must create output files (header-only, no data records)."""
 
@@ -109,9 +111,7 @@ class TestDryRunHeaderOnly:
         output_dir = pathlib.Path(config.meta.output.path)
         for gz_file in output_dir.rglob("*.csv.gz"):
             header, rows = _read_gz_csv(gz_file)
-            assert header == CDR_FIELDS, (
-                f"Header mismatch in {gz_file.name}"
-            )
+            assert header == CDR_FIELDS, f"Header mismatch in {gz_file.name}"
             assert len(rows) == 0, (
                 f"Dry run must produce 0 records, got {len(rows)} in {gz_file.name}"
             )
@@ -120,6 +120,7 @@ class TestDryRunHeaderOnly:
 # ---------------------------------------------------------------------------
 # Tests: actual generation
 # ---------------------------------------------------------------------------
+
 
 class TestGenerateProducesRecords:
     """Normal run (not dry-run) must produce > 0 CDR records."""
@@ -162,7 +163,7 @@ class TestOutputSorted:
             for i in range(1, len(timestamps)):
                 assert timestamps[i] >= timestamps[i - 1], (
                     f"Records not sorted in {gz_file.name}: "
-                    f"'{timestamps[i-1]}' > '{timestamps[i]}' at row {i}"
+                    f"'{timestamps[i - 1]}' > '{timestamps[i]}' at row {i}"
                 )
 
 
@@ -226,8 +227,7 @@ class TestMoMtPairsComplete:
         all_records = _collect_all_records(output_dir)
 
         voice_records = [
-            r for r in all_records
-            if r.get("record_type", "") in ("mo_call", "mt_call")
+            r for r in all_records if r.get("record_type", "") in ("mo_call", "mt_call")
         ]
         if not voice_records:
             pytest.skip("No voice records generated")
@@ -242,12 +242,8 @@ class TestMoMtPairsComplete:
 
         # Each consolidation_id should have exactly 1 MO + 1 MT
         for cid, types in by_cid.items():
-            assert "mo_call" in types, (
-                f"consolidation_id={cid} missing MO record"
-            )
-            assert "mt_call" in types, (
-                f"consolidation_id={cid} missing MT record"
-            )
+            assert "mo_call" in types, f"consolidation_id={cid} missing MO record"
+            assert "mt_call" in types, f"consolidation_id={cid} missing MT record"
             assert len(types) == 2, (
                 f"consolidation_id={cid} should have 2 records, got {len(types)}: {types}"
             )

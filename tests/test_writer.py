@@ -22,6 +22,7 @@ from cdr_generator.writer.csv_writer import CSVWriter, CsvWriter, create_empty_o
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_record(**overrides) -> CDRRecord:
     """Create a minimal valid CDRRecord with optional overrides."""
     defaults = {
@@ -63,7 +64,9 @@ class TestCDRFields:
 
     def test_cdr_fields_contains_mandatory_fields(self) -> None:
         for field in ("record_type", "served_imsi", "event_timestamp", "serving_ne_id"):
-            assert field in CDR_FIELDS, f"Mandatory field {field!r} missing from CDR_FIELDS"
+            assert field in CDR_FIELDS, (
+                f"Mandatory field {field!r} missing from CDR_FIELDS"
+            )
 
     def test_cdr_fields_count(self) -> None:
         assert len(CDR_FIELDS) == 26
@@ -186,7 +189,9 @@ class TestCsvWriterCreatesFile:
         expected = tmp_output_dir / "msc-01" / "CDR_msc-01_20250101.csv.gz"
         assert expected.exists(), f"Expected file not found: {expected}"
 
-    def test_csv_writer_creates_ne_subdirectory(self, tmp_output_dir: pathlib.Path) -> None:
+    def test_csv_writer_creates_ne_subdirectory(
+        self, tmp_output_dir: pathlib.Path
+    ) -> None:
         writer = CsvWriter(output_dir=tmp_output_dir)
         writer.write_file(ne_id="sgw-01", file_date=date(2025, 1, 1), records=[])
         writer.close()
@@ -242,7 +247,9 @@ class TestCsvWriterContextManager:
 class TestCsvWriterHeader:
     """Test that the CSV header matches the CDR schema."""
 
-    def test_csv_writer_header_matches_schema(self, tmp_output_dir: pathlib.Path) -> None:
+    def test_csv_writer_header_matches_schema(
+        self, tmp_output_dir: pathlib.Path
+    ) -> None:
         writer = CsvWriter(output_dir=tmp_output_dir)
         writer.write_file(ne_id="msc-01", file_date=date(2025, 1, 1), records=[])
         writer.close()
@@ -266,7 +273,9 @@ class TestCsvWriterHeader:
 class TestCsvWriterMetadata:
     """Test metadata comment writing."""
 
-    def test_metadata_comment_present_by_default(self, tmp_output_dir: pathlib.Path) -> None:
+    def test_metadata_comment_present_by_default(
+        self, tmp_output_dir: pathlib.Path
+    ) -> None:
         writer = CsvWriter(output_dir=tmp_output_dir, include_metadata=True)
         writer.write_file(ne_id="msc-01", file_date=date(2025, 1, 1))
 
@@ -281,7 +290,9 @@ class TestCsvWriterMetadata:
 
         file_path = tmp_output_dir / "msc-01" / "CDR_msc-01_20250101.csv.gz"
         lines = _read_gz_lines(file_path)
-        assert not lines[0].startswith("#"), "No comment expected when metadata disabled"
+        assert not lines[0].startswith("#"), (
+            "No comment expected when metadata disabled"
+        )
 
     def test_metadata_contains_date(self, tmp_output_dir: pathlib.Path) -> None:
         writer = CsvWriter(output_dir=tmp_output_dir, include_metadata=True)
@@ -392,7 +403,9 @@ class TestCSVWriterLowLevel:
         path = writer.write_header("msc-01", "20250101", metadata={"ne_id": "msc-01"})
         assert path.exists()
 
-    def test_write_header_returns_correct_path(self, tmp_output_dir: pathlib.Path) -> None:
+    def test_write_header_returns_correct_path(
+        self, tmp_output_dir: pathlib.Path
+    ) -> None:
         writer = CSVWriter(output_dir=tmp_output_dir)
         path = writer.write_header("msc-01", "20250101")
         expected = tmp_output_dir / "msc-01" / "CDR_msc-01_20250101.csv.gz"
@@ -416,13 +429,13 @@ class TestCSVWriterLowLevel:
 
     def test_write_header_metadata_disabled(self, tmp_output_dir: pathlib.Path) -> None:
         writer = CSVWriter(output_dir=tmp_output_dir, include_metadata=False)
-        path = writer.write_header(
-            "msc-01", "20250101", metadata={"ne_id": "msc-01"}
-        )
+        path = writer.write_header("msc-01", "20250101", metadata={"ne_id": "msc-01"})
         lines = _read_gz_lines(path)
         assert not lines[0].startswith("#")
 
-    def test_write_header_contains_cdr_fields(self, tmp_output_dir: pathlib.Path) -> None:
+    def test_write_header_contains_cdr_fields(
+        self, tmp_output_dir: pathlib.Path
+    ) -> None:
         writer = CSVWriter(output_dir=tmp_output_dir)
         path = writer.write_header("msc-01", "20250101")
         rows = _read_gz_csv_rows(path)
@@ -594,7 +607,9 @@ class TestCreateEmptyOutput:
         paths = create_empty_output(config, nes)
         for p in paths:
             rows = _read_gz_csv_rows(p)
-            assert len(rows) == 1, f"File {p} should have header only, got {len(rows)} rows"
+            assert len(rows) == 1, (
+                f"File {p} should have header only, got {len(rows)} rows"
+            )
             assert rows[0] == CDR_FIELDS
 
     def test_files_have_metadata_comments(
@@ -653,7 +668,9 @@ class TestDateRange:
         from cdr_generator.config.loader import load_config
 
         output_dir = tmp_path / "output"
-        minimal_valid_config_dict["meta"]["time_range"]["start"] = "2025-01-01T00:00:00Z"
+        minimal_valid_config_dict["meta"]["time_range"]["start"] = (
+            "2025-01-01T00:00:00Z"
+        )
         minimal_valid_config_dict["meta"]["time_range"]["end"] = "2025-01-03T23:59:59Z"
         minimal_valid_config_dict["meta"]["output"]["path"] = str(output_dir)
         cfg_path = tmp_config_file(minimal_valid_config_dict)

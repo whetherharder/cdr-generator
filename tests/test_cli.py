@@ -33,11 +33,15 @@ class TestValidateConfigCommand:
     def test_valid_config_exits_zero(
         self, runner: CliRunner, sample_config_path: pathlib.Path
     ) -> None:
-        result = runner.invoke(main, ["validate-config", "--config", str(sample_config_path)])
+        result = runner.invoke(
+            main, ["validate-config", "--config", str(sample_config_path)]
+        )
         assert result.exit_code == 0
         assert "Config OK" in result.output
 
-    def test_missing_config_file(self, runner: CliRunner, tmp_path: pathlib.Path) -> None:
+    def test_missing_config_file(
+        self, runner: CliRunner, tmp_path: pathlib.Path
+    ) -> None:
         missing = tmp_path / "nonexistent.yaml"
         result = runner.invoke(main, ["validate-config", "--config", str(missing)])
         assert result.exit_code != 0
@@ -68,30 +72,40 @@ class TestGenerateAssetsCommand:
     """Test the generate-assets CLI command."""
 
     def test_generate_assets_creates_directory(
-        self, runner: CliRunner, sample_config_path: pathlib.Path, tmp_path: pathlib.Path
+        self,
+        runner: CliRunner,
+        sample_config_path: pathlib.Path,
+        tmp_path: pathlib.Path,
     ) -> None:
         assets_dir = tmp_path / "assets"
         result = runner.invoke(
             main,
             [
                 "generate-assets",
-                "--config", str(sample_config_path),
-                "--assets-dir", str(assets_dir),
+                "--config",
+                str(sample_config_path),
+                "--assets-dir",
+                str(assets_dir),
             ],
         )
         assert result.exit_code == 0, f"Command failed: {result.output}"
         assert assets_dir.exists()
 
     def test_generate_assets_creates_manifest(
-        self, runner: CliRunner, sample_config_path: pathlib.Path, tmp_path: pathlib.Path
+        self,
+        runner: CliRunner,
+        sample_config_path: pathlib.Path,
+        tmp_path: pathlib.Path,
     ) -> None:
         assets_dir = tmp_path / "assets"
         result = runner.invoke(
             main,
             [
                 "generate-assets",
-                "--config", str(sample_config_path),
-                "--assets-dir", str(assets_dir),
+                "--config",
+                str(sample_config_path),
+                "--assets-dir",
+                str(assets_dir),
             ],
         )
         assert result.exit_code == 0
@@ -104,30 +118,45 @@ class TestGenerateAssetsCommand:
         assert "subscriber_count" in manifest
 
     def test_generate_assets_creates_json_files(
-        self, runner: CliRunner, sample_config_path: pathlib.Path, tmp_path: pathlib.Path
+        self,
+        runner: CliRunner,
+        sample_config_path: pathlib.Path,
+        tmp_path: pathlib.Path,
     ) -> None:
         assets_dir = tmp_path / "assets"
         runner.invoke(
             main,
             [
                 "generate-assets",
-                "--config", str(sample_config_path),
-                "--assets-dir", str(assets_dir),
+                "--config",
+                str(sample_config_path),
+                "--assets-dir",
+                str(assets_dir),
             ],
         )
-        for name in ("cells.json", "network_elements.json", "subscribers.json", "manifest.json"):
+        for name in (
+            "cells.json",
+            "network_elements.json",
+            "subscribers.json",
+            "manifest.json",
+        ):
             assert (assets_dir / name).exists(), f"{name} not created"
 
     def test_generate_assets_output_message(
-        self, runner: CliRunner, sample_config_path: pathlib.Path, tmp_path: pathlib.Path
+        self,
+        runner: CliRunner,
+        sample_config_path: pathlib.Path,
+        tmp_path: pathlib.Path,
     ) -> None:
         assets_dir = tmp_path / "assets"
         result = runner.invoke(
             main,
             [
                 "generate-assets",
-                "--config", str(sample_config_path),
-                "--assets-dir", str(assets_dir),
+                "--config",
+                str(sample_config_path),
+                "--assets-dir",
+                str(assets_dir),
             ],
         )
         assert result.exit_code == 0
@@ -146,7 +175,10 @@ class TestValidateAssetsCommand:
     """Test the validate-assets CLI command."""
 
     def test_validate_valid_assets(
-        self, runner: CliRunner, sample_config_path: pathlib.Path, tmp_path: pathlib.Path
+        self,
+        runner: CliRunner,
+        sample_config_path: pathlib.Path,
+        tmp_path: pathlib.Path,
     ) -> None:
         assets_dir = tmp_path / "assets"
         # First generate assets
@@ -154,8 +186,10 @@ class TestValidateAssetsCommand:
             main,
             [
                 "generate-assets",
-                "--config", str(sample_config_path),
-                "--assets-dir", str(assets_dir),
+                "--config",
+                str(sample_config_path),
+                "--assets-dir",
+                str(assets_dir),
             ],
         )
         # Then validate
@@ -184,7 +218,10 @@ class TestGenerateCommand:
     """Test the generate CLI command."""
 
     def test_generate_dry_run(
-        self, runner: CliRunner, sample_config_path: pathlib.Path, tmp_path: pathlib.Path
+        self,
+        runner: CliRunner,
+        sample_config_path: pathlib.Path,
+        tmp_path: pathlib.Path,
     ) -> None:
         output_dir = tmp_path / "output"
         assets_dir = tmp_path / "assets"
@@ -192,9 +229,12 @@ class TestGenerateCommand:
             main,
             [
                 "generate",
-                "--config", str(sample_config_path),
-                "--assets-dir", str(assets_dir),
-                "--output-dir", str(output_dir),
+                "--config",
+                str(sample_config_path),
+                "--assets-dir",
+                str(assets_dir),
+                "--output-dir",
+                str(output_dir),
                 "--dry-run",
             ],
         )
@@ -203,7 +243,10 @@ class TestGenerateCommand:
         assert "header-only" in result.output
 
     def test_generate_dry_run_creates_files(
-        self, runner: CliRunner, sample_config_path: pathlib.Path, tmp_path: pathlib.Path
+        self,
+        runner: CliRunner,
+        sample_config_path: pathlib.Path,
+        tmp_path: pathlib.Path,
     ) -> None:
         output_dir = tmp_path / "output"
         assets_dir = tmp_path / "assets"
@@ -211,9 +254,12 @@ class TestGenerateCommand:
             main,
             [
                 "generate",
-                "--config", str(sample_config_path),
-                "--assets-dir", str(assets_dir),
-                "--output-dir", str(output_dir),
+                "--config",
+                str(sample_config_path),
+                "--assets-dir",
+                str(assets_dir),
+                "--output-dir",
+                str(output_dir),
                 "--dry-run",
             ],
         )
@@ -222,7 +268,10 @@ class TestGenerateCommand:
         assert len(gz_files) > 0, "No .csv.gz files created by dry-run"
 
     def test_generate_dry_run_files_are_header_only(
-        self, runner: CliRunner, sample_config_path: pathlib.Path, tmp_path: pathlib.Path
+        self,
+        runner: CliRunner,
+        sample_config_path: pathlib.Path,
+        tmp_path: pathlib.Path,
     ) -> None:
         import csv
         import gzip
@@ -233,9 +282,12 @@ class TestGenerateCommand:
             main,
             [
                 "generate",
-                "--config", str(sample_config_path),
-                "--assets-dir", str(assets_dir),
-                "--output-dir", str(output_dir),
+                "--config",
+                str(sample_config_path),
+                "--assets-dir",
+                str(assets_dir),
+                "--output-dir",
+                str(output_dir),
                 "--dry-run",
             ],
         )
@@ -249,7 +301,10 @@ class TestGenerateCommand:
             )
 
     def test_generate_without_dry_run_produces_records(
-        self, runner: CliRunner, sample_config_path: pathlib.Path, tmp_path: pathlib.Path
+        self,
+        runner: CliRunner,
+        sample_config_path: pathlib.Path,
+        tmp_path: pathlib.Path,
     ) -> None:
         output_dir = tmp_path / "output"
         assets_dir = tmp_path / "assets"
@@ -257,18 +312,26 @@ class TestGenerateCommand:
             main,
             [
                 "generate",
-                "--config", str(sample_config_path),
-                "--assets-dir", str(assets_dir),
-                "--output-dir", str(output_dir),
-                "--override", "subscribers.total_count=10",
-                "--override", "meta.time_range.end=2025-01-01T00:59:59Z",
+                "--config",
+                str(sample_config_path),
+                "--assets-dir",
+                str(assets_dir),
+                "--output-dir",
+                str(output_dir),
+                "--override",
+                "subscribers.total_count=10",
+                "--override",
+                "meta.time_range.end=2025-01-01T00:59:59Z",
             ],
         )
         assert result.exit_code == 0
         assert "Generation complete" in result.output
 
     def test_generate_with_override(
-        self, runner: CliRunner, sample_config_path: pathlib.Path, tmp_path: pathlib.Path
+        self,
+        runner: CliRunner,
+        sample_config_path: pathlib.Path,
+        tmp_path: pathlib.Path,
     ) -> None:
         output_dir = tmp_path / "output"
         assets_dir = tmp_path / "assets"
@@ -276,17 +339,24 @@ class TestGenerateCommand:
             main,
             [
                 "generate",
-                "--config", str(sample_config_path),
-                "--assets-dir", str(assets_dir),
-                "--output-dir", str(output_dir),
-                "--override", "subscribers.total_count=50",
+                "--config",
+                str(sample_config_path),
+                "--assets-dir",
+                str(assets_dir),
+                "--output-dir",
+                str(output_dir),
+                "--override",
+                "subscribers.total_count=50",
                 "--dry-run",
             ],
         )
         assert result.exit_code == 0
 
     def test_generate_auto_regenerates_assets_on_config_change(
-        self, runner: CliRunner, sample_config_path: pathlib.Path, tmp_path: pathlib.Path
+        self,
+        runner: CliRunner,
+        sample_config_path: pathlib.Path,
+        tmp_path: pathlib.Path,
     ) -> None:
         """If config hash changes, generate should regenerate assets."""
         output_dir = tmp_path / "output"
@@ -296,9 +366,12 @@ class TestGenerateCommand:
             main,
             [
                 "generate",
-                "--config", str(sample_config_path),
-                "--assets-dir", str(assets_dir),
-                "--output-dir", str(output_dir),
+                "--config",
+                str(sample_config_path),
+                "--assets-dir",
+                str(assets_dir),
+                "--output-dir",
+                str(output_dir),
                 "--dry-run",
             ],
         )
@@ -314,9 +387,12 @@ class TestGenerateCommand:
             main,
             [
                 "generate",
-                "--config", str(sample_config_path),
-                "--assets-dir", str(assets_dir),
-                "--output-dir", str(output_dir),
+                "--config",
+                str(sample_config_path),
+                "--assets-dir",
+                str(assets_dir),
+                "--output-dir",
+                str(output_dir),
                 "--dry-run",
             ],
         )
@@ -334,9 +410,7 @@ class TestEstimateCommand:
     def test_estimate_runs(
         self, runner: CliRunner, sample_config_path: pathlib.Path
     ) -> None:
-        result = runner.invoke(
-            main, ["estimate", "--config", str(sample_config_path)]
-        )
+        result = runner.invoke(main, ["estimate", "--config", str(sample_config_path)])
         assert result.exit_code == 0
         assert "not implemented" in result.output.lower() or "Phase" in result.output
 

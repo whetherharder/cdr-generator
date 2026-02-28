@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 # Enums
 # ---------------------------------------------------------------------------
 
+
 class NEType(str, Enum):
     msc = "msc"
     sgw = "sgw"
@@ -42,6 +43,7 @@ class CellCapacity(str, Enum):
 # Shared / reusable models
 # ---------------------------------------------------------------------------
 
+
 class Distribution(BaseModel):
     """Statistical distribution descriptor: {type: <name>, params: {…}}."""
 
@@ -63,6 +65,7 @@ class TimeRange(BaseModel):
 # ---------------------------------------------------------------------------
 # meta
 # ---------------------------------------------------------------------------
+
 
 class OutputConfig(BaseModel):
     format: str = "csv_gzip"
@@ -87,6 +90,7 @@ class MetaConfig(BaseModel):
 # ---------------------------------------------------------------------------
 # network
 # ---------------------------------------------------------------------------
+
 
 class OperatorConfig(BaseModel):
     mcc: str
@@ -147,6 +151,7 @@ class NetworkConfig(BaseModel):
 # subscribers
 # ---------------------------------------------------------------------------
 
+
 class DailyRates(BaseModel):
     mo_call: Distribution
     mo_sms: Distribution
@@ -190,7 +195,9 @@ class SubscriberProfile(BaseModel):
 class ContactBookConfig(BaseModel):
     avg_contacts: int = 15
     degree_distribution: Distribution = Field(
-        default_factory=lambda: Distribution(type="zipf", params={"a": 2.0, "min": 3, "max": 100})
+        default_factory=lambda: Distribution(
+            type="zipf", params={"a": 2.0, "min": 3, "max": 100}
+        )
     )
     asymmetric: bool = True
     intra_profile_bias: float = 1.5
@@ -215,12 +222,15 @@ class SubscribersConfig(BaseModel):
     msisdn_prefix: str = "+7916"
     profiles: list[SubscriberProfile] = Field(min_length=1)
     contact_book: ContactBookConfig = Field(default_factory=ContactBookConfig)
-    external_numbers: ExternalNumbersConfig = Field(default_factory=ExternalNumbersConfig)
+    external_numbers: ExternalNumbersConfig = Field(
+        default_factory=ExternalNumbersConfig
+    )
 
 
 # ---------------------------------------------------------------------------
 # events
 # ---------------------------------------------------------------------------
+
 
 class CauseWeight(BaseModel):
     """Weighted cause code entry used in voice failure/termination lists."""
@@ -275,7 +285,9 @@ class DataEventConfig(BaseModel):
     duration: DistributionWithBounds
     volume_uplink: DistributionWithBounds
     volume_downlink: DistributionWithBounds
-    profile_volume_multipliers: dict[str, VolumeMultiplier] = Field(default_factory=dict)
+    profile_volume_multipliers: dict[str, VolumeMultiplier] = Field(
+        default_factory=dict
+    )
     apn_weights: dict[str, float] = Field(default_factory=dict)
     qos_distribution: list[QoSEntry] = Field(default_factory=list)
     partial_records: PartialRecordsConfig = Field(default_factory=PartialRecordsConfig)
@@ -304,6 +316,7 @@ class EventsConfig(BaseModel):
 # ---------------------------------------------------------------------------
 # anomalies
 # ---------------------------------------------------------------------------
+
 
 class DuplicateRecordsConfig(BaseModel):
     enabled: bool = True
@@ -336,16 +349,23 @@ class CorruptValuesConfig(BaseModel):
 
 class AnomaliesConfig(BaseModel):
     enabled: bool = True
-    duplicate_records: DuplicateRecordsConfig = Field(default_factory=DuplicateRecordsConfig)
+    duplicate_records: DuplicateRecordsConfig = Field(
+        default_factory=DuplicateRecordsConfig
+    )
     missing_fields: MissingFieldsConfig = Field(default_factory=MissingFieldsConfig)
-    orphaned_records: OrphanedRecordsConfig = Field(default_factory=OrphanedRecordsConfig)
-    timestamp_anomalies: TimestampAnomaliesConfig = Field(default_factory=TimestampAnomaliesConfig)
+    orphaned_records: OrphanedRecordsConfig = Field(
+        default_factory=OrphanedRecordsConfig
+    )
+    timestamp_anomalies: TimestampAnomaliesConfig = Field(
+        default_factory=TimestampAnomaliesConfig
+    )
     corrupt_values: CorruptValuesConfig = Field(default_factory=CorruptValuesConfig)
 
 
 # ---------------------------------------------------------------------------
 # special_events
 # ---------------------------------------------------------------------------
+
 
 class Recurrence(BaseModel):
     days: list[str] = Field(default_factory=list)
@@ -373,6 +393,7 @@ class SpecialEventConfig(BaseModel):
 # vendor_extensions
 # ---------------------------------------------------------------------------
 
+
 class VendorFieldConfig(BaseModel):
     key: str
     value: Distribution | str | dict[str, Any]
@@ -385,6 +406,7 @@ class VendorExtensionConfig(BaseModel):
 # ---------------------------------------------------------------------------
 # Top-level config
 # ---------------------------------------------------------------------------
+
 
 class CDRGeneratorConfig(BaseModel):
     """Root configuration model — mirrors cdr_generator_config.yaml."""

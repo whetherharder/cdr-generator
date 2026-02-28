@@ -153,7 +153,10 @@ def minimal_valid_config_dict() -> dict:
             ],
             "contact_book": {
                 "avg_contacts": 15,
-                "degree_distribution": {"type": "zipf", "params": {"a": 2.0, "min": 3, "max": 100}},
+                "degree_distribution": {
+                    "type": "zipf",
+                    "params": {"a": 2.0, "min": 3, "max": 100},
+                },
                 "asymmetric": True,
                 "intra_profile_bias": 1.5,
                 "repeat_call_probability": 0.6,
@@ -173,12 +176,18 @@ def minimal_valid_config_dict() -> dict:
                     {"cause": "no_answer", "code": 19, "weight": 1.0},
                 ],
                 "duration": {
-                    "distribution": {"type": "lognormal", "params": {"mu": 4.0, "sigma": 1.2}},
+                    "distribution": {
+                        "type": "lognormal",
+                        "params": {"mu": 4.0, "sigma": 1.2},
+                    },
                     "min_seconds": 1,
                     "max_seconds": 7200,
                 },
                 "setup_duration_ms": {
-                    "distribution": {"type": "lognormal", "params": {"mu": 7.5, "sigma": 0.5}},
+                    "distribution": {
+                        "type": "lognormal",
+                        "params": {"mu": 7.5, "sigma": 0.5},
+                    },
                 },
                 "call_forwarding_rate": 0.03,
                 "normal_termination_causes": [
@@ -188,16 +197,25 @@ def minimal_valid_config_dict() -> dict:
             },
             "data": {
                 "duration": {
-                    "distribution": {"type": "lognormal", "params": {"mu": 6.0, "sigma": 1.5}},
+                    "distribution": {
+                        "type": "lognormal",
+                        "params": {"mu": 6.0, "sigma": 1.5},
+                    },
                     "min_seconds": 5,
                     "max_seconds": 86400,
                 },
                 "volume_uplink": {
-                    "distribution": {"type": "lognormal", "params": {"mu": 12.0, "sigma": 2.5}},
+                    "distribution": {
+                        "type": "lognormal",
+                        "params": {"mu": 12.0, "sigma": 2.5},
+                    },
                     "min_bytes": 100,
                 },
                 "volume_downlink": {
-                    "distribution": {"type": "lognormal", "params": {"mu": 14.0, "sigma": 2.5}},
+                    "distribution": {
+                        "type": "lognormal",
+                        "params": {"mu": 14.0, "sigma": 2.5},
+                    },
                     "min_bytes": 100,
                 },
                 "profile_volume_multipliers": {},
@@ -217,7 +235,10 @@ def minimal_valid_config_dict() -> dict:
             "sms": {
                 "delivery_success_rate": 0.97,
                 "delivery_delay": {
-                    "distribution": {"type": "lognormal", "params": {"mu": 1.0, "sigma": 1.5}},
+                    "distribution": {
+                        "type": "lognormal",
+                        "params": {"mu": 1.0, "sigma": 1.5},
+                    },
                     "min_seconds": 0.5,
                     "max_seconds": 86400,
                 },

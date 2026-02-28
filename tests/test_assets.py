@@ -200,9 +200,7 @@ class TestAssetGeneration:
             assert s1.home_cell_id == s2.home_cell_id
             assert s1.profile_name == s2.profile_name
 
-    def test_subscriber_imsi_prefix(
-        self, sample_config_path: pathlib.Path
-    ) -> None:
+    def test_subscriber_imsi_prefix(self, sample_config_path: pathlib.Path) -> None:
         """All subscriber IMSIs should start with the configured prefix."""
         config = load_config(sample_config_path)
         _, _, subscribers = generate_all_assets(config)
@@ -211,9 +209,7 @@ class TestAssetGeneration:
                 f"IMSI {sub.imsi} does not start with {config.subscribers.imsi_prefix}"
             )
 
-    def test_subscriber_msisdn_prefix(
-        self, sample_config_path: pathlib.Path
-    ) -> None:
+    def test_subscriber_msisdn_prefix(self, sample_config_path: pathlib.Path) -> None:
         """All subscriber MSISDNs should start with the configured prefix."""
         config = load_config(sample_config_path)
         _, _, subscribers = generate_all_assets(config)
@@ -222,9 +218,7 @@ class TestAssetGeneration:
                 f"MSISDN {sub.msisdn} does not start with {config.subscribers.msisdn_prefix}"
             )
 
-    def test_subscriber_imsi_uniqueness(
-        self, sample_config_path: pathlib.Path
-    ) -> None:
+    def test_subscriber_imsi_uniqueness(self, sample_config_path: pathlib.Path) -> None:
         """All subscriber IMSIs must be unique."""
         config = load_config(sample_config_path)
         _, _, subscribers = generate_all_assets(config)
@@ -264,7 +258,12 @@ class TestAssetStore:
 
         save_assets(tmp_assets_dir, cells, nes, subscribers, config_hash)
 
-        expected_files = {"cells.json", "network_elements.json", "subscribers.json", "manifest.json"}
+        expected_files = {
+            "cells.json",
+            "network_elements.json",
+            "subscribers.json",
+            "manifest.json",
+        }
         actual_files = {f.name for f in tmp_assets_dir.iterdir()}
         assert expected_files <= actual_files, (
             f"Missing files. Expected: {expected_files}, Got: {actual_files}"
@@ -423,9 +422,7 @@ class TestAssetValidation:
                 f"not in {ne_ids}"
             )
 
-    def test_subscriber_home_cell_valid(
-        self, sample_config_path: pathlib.Path
-    ) -> None:
+    def test_subscriber_home_cell_valid(self, sample_config_path: pathlib.Path) -> None:
         """Every subscriber's home_cell_id must be in cell id set."""
         config = load_config(sample_config_path)
         cells, nes, subscribers = generate_all_assets(config)
@@ -437,9 +434,7 @@ class TestAssetValidation:
                 f"not in {cell_ids}"
             )
 
-    def test_cell_neighbors_valid(
-        self, sample_config_path: pathlib.Path
-    ) -> None:
+    def test_cell_neighbors_valid(self, sample_config_path: pathlib.Path) -> None:
         """Every cell's neighbor must reference an existing cell_id."""
         config = load_config(sample_config_path)
         cells, _, _ = generate_all_assets(config)
@@ -453,9 +448,34 @@ class TestAssetValidation:
 
     def test_validate_detects_bad_serving_ne(self) -> None:
         """validate_assets should catch a subscriber referencing a nonexistent NE."""
-        cells = [Cell(cell_id=1, tac=100, ecgi="x-1", lat=0, lon=0, azimuth=0, sector=1, cell_type="urban", capacity="high")]
-        nes = [NetworkElement(id="msc-01", ne_type="msc", vendor="ericsson", serves_tacs=[100])]
-        subs = [Subscriber(imsi="250010", msisdn="+79160", imei="000000000000000", profile_name="test", home_cell_id=1, serving_ne_id="nonexistent")]
+        cells = [
+            Cell(
+                cell_id=1,
+                tac=100,
+                ecgi="x-1",
+                lat=0,
+                lon=0,
+                azimuth=0,
+                sector=1,
+                cell_type="urban",
+                capacity="high",
+            )
+        ]
+        nes = [
+            NetworkElement(
+                id="msc-01", ne_type="msc", vendor="ericsson", serves_tacs=[100]
+            )
+        ]
+        subs = [
+            Subscriber(
+                imsi="250010",
+                msisdn="+79160",
+                imei="000000000000000",
+                profile_name="test",
+                home_cell_id=1,
+                serving_ne_id="nonexistent",
+            )
+        ]
 
         errors = validate_assets(cells, nes, subs)
         assert len(errors) > 0
@@ -463,9 +483,34 @@ class TestAssetValidation:
 
     def test_validate_detects_bad_home_cell(self) -> None:
         """validate_assets should catch a subscriber referencing a nonexistent home cell."""
-        cells = [Cell(cell_id=1, tac=100, ecgi="x-1", lat=0, lon=0, azimuth=0, sector=1, cell_type="urban", capacity="high")]
-        nes = [NetworkElement(id="msc-01", ne_type="msc", vendor="ericsson", serves_tacs=[100])]
-        subs = [Subscriber(imsi="250010", msisdn="+79160", imei="000000000000000", profile_name="test", home_cell_id=999, serving_ne_id="msc-01")]
+        cells = [
+            Cell(
+                cell_id=1,
+                tac=100,
+                ecgi="x-1",
+                lat=0,
+                lon=0,
+                azimuth=0,
+                sector=1,
+                cell_type="urban",
+                capacity="high",
+            )
+        ]
+        nes = [
+            NetworkElement(
+                id="msc-01", ne_type="msc", vendor="ericsson", serves_tacs=[100]
+            )
+        ]
+        subs = [
+            Subscriber(
+                imsi="250010",
+                msisdn="+79160",
+                imei="000000000000000",
+                profile_name="test",
+                home_cell_id=999,
+                serving_ne_id="msc-01",
+            )
+        ]
 
         errors = validate_assets(cells, nes, subs)
         assert len(errors) > 0
@@ -473,8 +518,25 @@ class TestAssetValidation:
 
     def test_validate_detects_bad_neighbor(self) -> None:
         """validate_assets should catch a cell referencing a nonexistent neighbor."""
-        cells = [Cell(cell_id=1, tac=100, ecgi="x-1", lat=0, lon=0, azimuth=0, sector=1, cell_type="urban", capacity="high", neighbors=[999])]
-        nes = [NetworkElement(id="msc-01", ne_type="msc", vendor="ericsson", serves_tacs=[100])]
+        cells = [
+            Cell(
+                cell_id=1,
+                tac=100,
+                ecgi="x-1",
+                lat=0,
+                lon=0,
+                azimuth=0,
+                sector=1,
+                cell_type="urban",
+                capacity="high",
+                neighbors=[999],
+            )
+        ]
+        nes = [
+            NetworkElement(
+                id="msc-01", ne_type="msc", vendor="ericsson", serves_tacs=[100]
+            )
+        ]
         subs: list[Subscriber] = []
 
         errors = validate_assets(cells, nes, subs)

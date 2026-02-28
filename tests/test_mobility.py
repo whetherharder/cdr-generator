@@ -21,6 +21,7 @@ from cdr_generator.config.models import MobilityConfig
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def rng() -> np.random.Generator:
     return np.random.default_rng(42)
@@ -62,24 +63,78 @@ def work_cell() -> Cell:
 def cells() -> list[Cell]:
     """A set of cells for mobility tests."""
     return [
-        Cell(cell_id=20011, tac=2001, ecgi="25001-20011", lat=55.7558, lon=37.6173,
-             azimuth=0, sector=1, cell_type="urban", capacity="high",
-             neighbors=[20012, 20013]),
-        Cell(cell_id=20012, tac=2001, ecgi="25001-20012", lat=55.7560, lon=37.6200,
-             azimuth=120, sector=2, cell_type="urban", capacity="medium",
-             neighbors=[20011, 20013]),
-        Cell(cell_id=20013, tac=2001, ecgi="25001-20013", lat=55.7555, lon=37.6150,
-             azimuth=240, sector=3, cell_type="urban", capacity="medium",
-             neighbors=[20011, 20012]),
-        Cell(cell_id=20021, tac=2002, ecgi="25001-20021", lat=55.7700, lon=37.6400,
-             azimuth=0, sector=1, cell_type="urban", capacity="high",
-             neighbors=[20022, 20023]),
-        Cell(cell_id=20022, tac=2002, ecgi="25001-20022", lat=55.7705, lon=37.6420,
-             azimuth=120, sector=2, cell_type="suburban", capacity="medium",
-             neighbors=[20021, 20023]),
-        Cell(cell_id=20023, tac=2002, ecgi="25001-20023", lat=55.7695, lon=37.6380,
-             azimuth=240, sector=3, cell_type="suburban", capacity="low",
-             neighbors=[20021, 20022]),
+        Cell(
+            cell_id=20011,
+            tac=2001,
+            ecgi="25001-20011",
+            lat=55.7558,
+            lon=37.6173,
+            azimuth=0,
+            sector=1,
+            cell_type="urban",
+            capacity="high",
+            neighbors=[20012, 20013],
+        ),
+        Cell(
+            cell_id=20012,
+            tac=2001,
+            ecgi="25001-20012",
+            lat=55.7560,
+            lon=37.6200,
+            azimuth=120,
+            sector=2,
+            cell_type="urban",
+            capacity="medium",
+            neighbors=[20011, 20013],
+        ),
+        Cell(
+            cell_id=20013,
+            tac=2001,
+            ecgi="25001-20013",
+            lat=55.7555,
+            lon=37.6150,
+            azimuth=240,
+            sector=3,
+            cell_type="urban",
+            capacity="medium",
+            neighbors=[20011, 20012],
+        ),
+        Cell(
+            cell_id=20021,
+            tac=2002,
+            ecgi="25001-20021",
+            lat=55.7700,
+            lon=37.6400,
+            azimuth=0,
+            sector=1,
+            cell_type="urban",
+            capacity="high",
+            neighbors=[20022, 20023],
+        ),
+        Cell(
+            cell_id=20022,
+            tac=2002,
+            ecgi="25001-20022",
+            lat=55.7705,
+            lon=37.6420,
+            azimuth=120,
+            sector=2,
+            cell_type="suburban",
+            capacity="medium",
+            neighbors=[20021, 20023],
+        ),
+        Cell(
+            cell_id=20023,
+            tac=2002,
+            ecgi="25001-20023",
+            lat=55.7695,
+            lon=37.6380,
+            azimuth=240,
+            sector=3,
+            cell_type="suburban",
+            capacity="low",
+            neighbors=[20021, 20022],
+        ),
     ]
 
 
@@ -129,12 +184,11 @@ def mobility_config_traveler() -> MobilityConfig:
 # Position at different times of day
 # ===================================================================
 
+
 class TestPositionByTimeOfDay:
     """resolve_position returns home cell at night, work cell during day."""
 
-    def test_night_returns_home_cell(
-        self, office_worker_sub, cells_by_id
-    ) -> None:
+    def test_night_returns_home_cell(self, office_worker_sub, cells_by_id) -> None:
         from cdr_generator.engine.mobility import resolve_position
 
         night_time = datetime(2025, 1, 15, 3, 0, 0, tzinfo=timezone.utc)
@@ -255,6 +309,7 @@ class TestPositionDeterministic:
 # Handover: first_cell != last_cell
 # ===================================================================
 
+
 class TestHandover:
     """~5% of events should have first_cell != last_cell (handover)."""
 
@@ -286,9 +341,7 @@ class TestHandover:
             f"Handover rate {handover_rate:.3f} much higher than expected {expected}"
         )
 
-    def test_handover_cell_is_neighbor(
-        self, office_worker_sub, cells_by_id
-    ) -> None:
+    def test_handover_cell_is_neighbor(self, office_worker_sub, cells_by_id) -> None:
         """When handover occurs, last_cell should be a neighbor of first_cell."""
         from cdr_generator.engine.mobility import resolve_position
 
@@ -326,6 +379,7 @@ class TestHandover:
 # ===================================================================
 # Roaming
 # ===================================================================
+
 
 class TestRoaming:
     """Roaming probability differs by profile."""
@@ -391,8 +445,11 @@ class TestRoaming:
         )
 
     def test_roaming_rate_difference(
-        self, office_worker_sub, cells_by_id,
-        mobility_config_office, mobility_config_traveler
+        self,
+        office_worker_sub,
+        cells_by_id,
+        mobility_config_office,
+        mobility_config_traveler,
     ) -> None:
         """Heavy traveler should roam significantly more than office worker."""
         from cdr_generator.engine.mobility import resolve_position
@@ -437,6 +494,7 @@ class TestRoaming:
 # ===================================================================
 # Subscriber without work cell
 # ===================================================================
+
 
 class TestNoWorkCell:
     """Subscribers without work_cell_id (e.g., retiree) stay at home."""

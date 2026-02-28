@@ -22,6 +22,7 @@ from cdr_generator.models.cdr import CDRRecord
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def rng() -> np.random.Generator:
     return np.random.default_rng(42)
@@ -182,12 +183,19 @@ def sms_config() -> dict:
 # Voice generator tests
 # ===================================================================
 
+
 class TestVoiceMoMtPair:
     """generate_voice_cdr must return MO+MT pair on successful call."""
 
     def test_success_returns_two_cdrs(
-        self, rng, sample_subscriber, b_subscriber, msc_ne, sample_cell,
-        event_time, voice_config,
+        self,
+        rng,
+        sample_subscriber,
+        b_subscriber,
+        msc_ne,
+        sample_cell,
+        event_time,
+        voice_config,
     ) -> None:
         from cdr_generator.generators.voice import generate_voice_cdr
 
@@ -205,8 +213,14 @@ class TestVoiceMoMtPair:
         )
 
     def test_mo_and_mt_record_types(
-        self, rng, sample_subscriber, b_subscriber, msc_ne, sample_cell,
-        event_time, voice_config,
+        self,
+        rng,
+        sample_subscriber,
+        b_subscriber,
+        msc_ne,
+        sample_cell,
+        event_time,
+        voice_config,
     ) -> None:
         from cdr_generator.generators.voice import generate_voice_cdr
 
@@ -228,8 +242,14 @@ class TestVoiceConsolidationId:
     """MO and MT records from the same call share a consolidation_id."""
 
     def test_shared_consolidation_id(
-        self, rng, sample_subscriber, b_subscriber, msc_ne, sample_cell,
-        event_time, voice_config,
+        self,
+        rng,
+        sample_subscriber,
+        b_subscriber,
+        msc_ne,
+        sample_cell,
+        event_time,
+        voice_config,
     ) -> None:
         from cdr_generator.generators.voice import generate_voice_cdr
 
@@ -257,8 +277,14 @@ class TestVoiceFailure:
     """When success_rate=0, all calls fail -- only MO CDR is produced."""
 
     def test_failure_returns_one_cdr(
-        self, rng, sample_subscriber, b_subscriber, msc_ne, sample_cell,
-        event_time, voice_config,
+        self,
+        rng,
+        sample_subscriber,
+        b_subscriber,
+        msc_ne,
+        sample_cell,
+        event_time,
+        voice_config,
     ) -> None:
         from cdr_generator.generators.voice import generate_voice_cdr
 
@@ -278,8 +304,14 @@ class TestVoiceFailure:
         assert records[0].record_type == "mo_call"
 
     def test_failure_has_cause_code(
-        self, rng, sample_subscriber, b_subscriber, msc_ne, sample_cell,
-        event_time, voice_config,
+        self,
+        rng,
+        sample_subscriber,
+        b_subscriber,
+        msc_ne,
+        sample_cell,
+        event_time,
+        voice_config,
     ) -> None:
         from cdr_generator.generators.voice import generate_voice_cdr
 
@@ -302,12 +334,19 @@ class TestVoiceFailure:
 # SMS generator tests
 # ===================================================================
 
+
 class TestSmsPair:
     """generate_sms_cdr must produce MO+MT pair on successful delivery."""
 
     def test_success_returns_two_cdrs(
-        self, rng, sample_subscriber, b_subscriber, smsc_ne, sample_cell,
-        event_time, sms_config,
+        self,
+        rng,
+        sample_subscriber,
+        b_subscriber,
+        smsc_ne,
+        sample_cell,
+        event_time,
+        sms_config,
     ) -> None:
         from cdr_generator.generators.sms import generate_sms_cdr
 
@@ -328,8 +367,14 @@ class TestSmsPair:
         assert "mt_sms" in types
 
     def test_failure_returns_one_cdr(
-        self, rng, sample_subscriber, b_subscriber, smsc_ne, sample_cell,
-        event_time, sms_config,
+        self,
+        rng,
+        sample_subscriber,
+        b_subscriber,
+        smsc_ne,
+        sample_cell,
+        event_time,
+        sms_config,
     ) -> None:
         from cdr_generator.generators.sms import generate_sms_cdr
 
@@ -351,12 +396,19 @@ class TestSmsPair:
 # Data generator tests
 # ===================================================================
 
+
 class TestDataSgwPgwPair:
     """generate_data_cdr must produce SGW+PGW pair with matching charging_id."""
 
     def test_pair_returned(
-        self, rng, sample_subscriber, sgw_ne, pgw_ne, sample_cell,
-        event_time, data_config,
+        self,
+        rng,
+        sample_subscriber,
+        sgw_ne,
+        pgw_ne,
+        sample_cell,
+        event_time,
+        data_config,
     ) -> None:
         from cdr_generator.generators.data import generate_data_cdr
 
@@ -376,8 +428,14 @@ class TestDataSgwPgwPair:
         assert len(pgw_records) >= 1, "Must have at least one PGW record"
 
     def test_charging_id_match(
-        self, rng, sample_subscriber, sgw_ne, pgw_ne, sample_cell,
-        event_time, data_config,
+        self,
+        rng,
+        sample_subscriber,
+        sgw_ne,
+        pgw_ne,
+        sample_cell,
+        event_time,
+        data_config,
     ) -> None:
         from cdr_generator.generators.data import generate_data_cdr
 
@@ -400,8 +458,14 @@ class TestDataSgwPgwPair:
         )
 
     def test_charging_id_not_none(
-        self, rng, sample_subscriber, sgw_ne, pgw_ne, sample_cell,
-        event_time, data_config,
+        self,
+        rng,
+        sample_subscriber,
+        sgw_ne,
+        pgw_ne,
+        sample_cell,
+        event_time,
+        data_config,
     ) -> None:
         from cdr_generator.generators.data import generate_data_cdr
 
@@ -424,8 +488,14 @@ class TestDataPartialRecords:
     """Long data sessions must produce multiple partial records."""
 
     def test_long_session_creates_partials(
-        self, rng, sample_subscriber, sgw_ne, pgw_ne, sample_cell,
-        event_time, data_config,
+        self,
+        rng,
+        sample_subscriber,
+        sgw_ne,
+        pgw_ne,
+        sample_cell,
+        event_time,
+        data_config,
     ) -> None:
         from cdr_generator.generators.data import generate_data_cdr
 
@@ -455,8 +525,14 @@ class TestDataPartialRecords:
         )
 
     def test_partial_records_share_charging_id(
-        self, rng, sample_subscriber, sgw_ne, pgw_ne, sample_cell,
-        event_time, data_config,
+        self,
+        rng,
+        sample_subscriber,
+        sgw_ne,
+        pgw_ne,
+        sample_cell,
+        event_time,
+        data_config,
     ) -> None:
         from cdr_generator.generators.data import generate_data_cdr
 
@@ -486,6 +562,7 @@ class TestDataPartialRecords:
 # Mandatory fields test
 # ===================================================================
 
+
 class TestAllFieldsPresent:
     """All CDR records must have mandatory fields populated (not None)."""
 
@@ -498,8 +575,14 @@ class TestAllFieldsPresent:
     ]
 
     def test_voice_mandatory_fields(
-        self, rng, sample_subscriber, b_subscriber, msc_ne, sample_cell,
-        event_time, voice_config,
+        self,
+        rng,
+        sample_subscriber,
+        b_subscriber,
+        msc_ne,
+        sample_cell,
+        event_time,
+        voice_config,
     ) -> None:
         from cdr_generator.generators.voice import generate_voice_cdr
 
@@ -519,8 +602,14 @@ class TestAllFieldsPresent:
                 )
 
     def test_data_mandatory_fields(
-        self, rng, sample_subscriber, sgw_ne, pgw_ne, sample_cell,
-        event_time, data_config,
+        self,
+        rng,
+        sample_subscriber,
+        sgw_ne,
+        pgw_ne,
+        sample_cell,
+        event_time,
+        data_config,
     ) -> None:
         from cdr_generator.generators.data import generate_data_cdr
 
@@ -540,8 +629,14 @@ class TestAllFieldsPresent:
                 )
 
     def test_sms_mandatory_fields(
-        self, rng, sample_subscriber, b_subscriber, smsc_ne, sample_cell,
-        event_time, sms_config,
+        self,
+        rng,
+        sample_subscriber,
+        b_subscriber,
+        smsc_ne,
+        sample_cell,
+        event_time,
+        sms_config,
     ) -> None:
         from cdr_generator.generators.sms import generate_sms_cdr
 

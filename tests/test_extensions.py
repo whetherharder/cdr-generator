@@ -22,6 +22,7 @@ from cdr_generator.config.models import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def rng() -> np.random.Generator:
     return np.random.default_rng(42)
@@ -72,6 +73,7 @@ def event_context() -> dict:
 # Extension generation
 # ===================================================================
 
+
 class TestExtensionGeneration:
     """generate_extensions returns a base64-encoded JSON string."""
 
@@ -81,7 +83,10 @@ class TestExtensionGeneration:
         from cdr_generator.generators.extensions import generate_extensions
 
         result = generate_extensions(
-            "ericsson", ericsson_vendor_config, event_context, rng,
+            "ericsson",
+            ericsson_vendor_config,
+            event_context,
+            rng,
         )
         assert isinstance(result, str), "Extensions must be a string"
         assert len(result) > 0, "Extensions string must not be empty"
@@ -98,7 +103,10 @@ class TestExtensionGeneration:
         from cdr_generator.generators.extensions import generate_extensions
 
         result = generate_extensions(
-            "ericsson", ericsson_vendor_config, event_context, rng,
+            "ericsson",
+            ericsson_vendor_config,
+            event_context,
+            rng,
         )
         decoded = base64.b64decode(result)
         try:
@@ -115,7 +123,10 @@ class TestExtensionGeneration:
         from cdr_generator.generators.extensions import generate_extensions
 
         result = generate_extensions(
-            "ericsson", ericsson_vendor_config, event_context, rng,
+            "ericsson",
+            ericsson_vendor_config,
+            event_context,
+            rng,
         )
         decoded = json.loads(base64.b64decode(result))
 
@@ -133,7 +144,10 @@ class TestExtensionGeneration:
         from cdr_generator.generators.extensions import generate_extensions
 
         result = generate_extensions(
-            "ericsson", ericsson_vendor_config, event_context, rng,
+            "ericsson",
+            ericsson_vendor_config,
+            event_context,
+            rng,
         )
         decoded = json.loads(base64.b64decode(result))
 
@@ -142,13 +156,14 @@ class TestExtensionGeneration:
         )
         assert decoded["ericsson.sw_version"] == "R16B"
 
-    def test_nokia_keys_present(
-        self, nokia_vendor_config, event_context, rng
-    ) -> None:
+    def test_nokia_keys_present(self, nokia_vendor_config, event_context, rng) -> None:
         from cdr_generator.generators.extensions import generate_extensions
 
         result = generate_extensions(
-            "nokia", nokia_vendor_config, event_context, rng,
+            "nokia",
+            nokia_vendor_config,
+            event_context,
+            rng,
         )
         decoded = json.loads(base64.b64decode(result))
 
@@ -167,7 +182,10 @@ class TestExtensionWithDistribution:
         from cdr_generator.generators.extensions import generate_extensions
 
         result = generate_extensions(
-            "ericsson", ericsson_vendor_config, event_context, rng,
+            "ericsson",
+            ericsson_vendor_config,
+            event_context,
+            rng,
         )
         decoded = json.loads(base64.b64decode(result))
 
@@ -180,19 +198,23 @@ class TestExtensionWithDistribution:
 class TestExtensionDeterministic:
     """Extension generation must be deterministic with the same seed."""
 
-    def test_same_seed_same_result(
-        self, ericsson_vendor_config, event_context
-    ) -> None:
+    def test_same_seed_same_result(self, ericsson_vendor_config, event_context) -> None:
         from cdr_generator.generators.extensions import generate_extensions
 
         rng1 = np.random.default_rng(42)
         rng2 = np.random.default_rng(42)
 
         result1 = generate_extensions(
-            "ericsson", ericsson_vendor_config, event_context, rng1,
+            "ericsson",
+            ericsson_vendor_config,
+            event_context,
+            rng1,
         )
         result2 = generate_extensions(
-            "ericsson", ericsson_vendor_config, event_context, rng2,
+            "ericsson",
+            ericsson_vendor_config,
+            event_context,
+            rng2,
         )
         assert result1 == result2, "Same seed must produce identical extensions"
 

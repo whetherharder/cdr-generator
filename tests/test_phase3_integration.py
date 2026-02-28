@@ -40,6 +40,7 @@ INTERNAL_PREFIX = "+7916"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_phase3_config(
     tmp_path: pathlib.Path,
     start_hour: int = 10,
@@ -113,6 +114,7 @@ def _decode_vendor_extensions(encoded: str) -> dict:
 # Shared fixture: run generation once, reuse across tests in the module
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def phase3_output(tmp_path_factory):
     """Run a single Phase 3 generation and return (config, records, output_dir)."""
@@ -128,6 +130,7 @@ def phase3_output(tmp_path_factory):
 # ---------------------------------------------------------------------------
 # Test: End-to-end generation
 # ---------------------------------------------------------------------------
+
 
 class TestPhase3EndToEnd:
     """Verify that Phase 3 generation produces records of all expected types."""
@@ -182,6 +185,7 @@ class TestPhase3EndToEnd:
 # Test: B-party / external call distribution
 # ---------------------------------------------------------------------------
 
+
 class TestPhase3BPartyDistribution:
     """Verify B-party selection produces a realistic mix of internal/external."""
 
@@ -193,7 +197,8 @@ class TestPhase3BPartyDistribution:
         """
         _, records, _, _ = phase3_output
         mo_calls = [
-            r for r in records
+            r
+            for r in records
             if r["record_type"] == "mo_call" and r.get("called_number", "")
         ]
 
@@ -214,13 +219,13 @@ class TestPhase3BPartyDistribution:
         """Internal B-party numbers should use the subscriber MSISDN prefix."""
         _, records, _, _ = phase3_output
         mo_calls = [
-            r for r in records
+            r
+            for r in records
             if r["record_type"] == "mo_call" and r.get("called_number", "")
         ]
 
         internal_calls = [
-            r for r in mo_calls
-            if not _is_external_number(r["called_number"])
+            r for r in mo_calls if not _is_external_number(r["called_number"])
         ]
 
         if not internal_calls:
@@ -228,7 +233,9 @@ class TestPhase3BPartyDistribution:
 
         for rec in internal_calls:
             called = rec["called_number"]
-            assert called.startswith(INTERNAL_PREFIX) or called.startswith("external"), (
+            assert called.startswith(INTERNAL_PREFIX) or called.startswith(
+                "external"
+            ), (
                 f"Internal call to {called} does not use subscriber prefix {INTERNAL_PREFIX}"
             )
 
@@ -237,6 +244,7 @@ class TestPhase3BPartyDistribution:
 # Test: Mobility -- cell assignment and handover
 # ---------------------------------------------------------------------------
 
+
 class TestPhase3Mobility:
     """Verify mobility model: cell IDs are populated and handovers occur."""
 
@@ -244,8 +252,7 @@ class TestPhase3Mobility:
         """All MO records should have first_cell_id and last_cell_id set."""
         _, records, _, _ = phase3_output
         mo_records = [
-            r for r in records
-            if r["record_type"] in ("mo_call", "mo_sms", "sgw_data")
+            r for r in records if r["record_type"] in ("mo_call", "mo_sms", "sgw_data")
         ]
 
         if not mo_records:
@@ -271,7 +278,8 @@ class TestPhase3Mobility:
             valid_cell_ids.add(str(cell_item.cell_id))
 
         mo_records = [
-            r for r in records
+            r
+            for r in records
             if r["record_type"] in ("mo_call", "mo_sms", "sgw_data")
             and r.get("first_cell_id")
         ]
@@ -303,7 +311,8 @@ class TestPhase3Mobility:
 
         # Check MO voice records specifically (most likely to show handover)
         mo_records = [
-            r for r in records
+            r
+            for r in records
             if r["record_type"] in ("mo_call", "mo_sms", "sgw_data")
             and r.get("first_cell_id")
             and r.get("last_cell_id")
@@ -313,8 +322,7 @@ class TestPhase3Mobility:
             pytest.skip("Too few records for handover detection")
 
         handovers = sum(
-            1 for r in mo_records
-            if r["first_cell_id"] != r["last_cell_id"]
+            1 for r in mo_records if r["first_cell_id"] != r["last_cell_id"]
         )
 
         assert handovers > 0, (
@@ -327,6 +335,7 @@ class TestPhase3Mobility:
 # Test: Vendor extensions
 # ---------------------------------------------------------------------------
 
+
 class TestPhase3VendorExtensions:
     """Verify vendor extension fields are correctly generated and encoded."""
 
@@ -337,9 +346,9 @@ class TestPhase3VendorExtensions:
 
         ericsson_nes = {"msc-01", "sgw-01", "smsc-01"}
         ericsson_records = [
-            r for r in records
-            if r.get("serving_ne_id") in ericsson_nes
-            and r.get("vendor_extensions", "")
+            r
+            for r in records
+            if r.get("serving_ne_id") in ericsson_nes and r.get("vendor_extensions", "")
         ]
 
         if not ericsson_records:
@@ -359,9 +368,9 @@ class TestPhase3VendorExtensions:
         _, records, _, _ = phase3_output
 
         nokia_records = [
-            r for r in records
-            if r.get("serving_ne_id") == "pgw-01"
-            and r.get("vendor_extensions", "")
+            r
+            for r in records
+            if r.get("serving_ne_id") == "pgw-01" and r.get("vendor_extensions", "")
         ]
 
         if not nokia_records:
@@ -371,9 +380,7 @@ class TestPhase3VendorExtensions:
             ext = _decode_vendor_extensions(rec["vendor_extensions"])
             assert isinstance(ext, dict)
             nokia_keys = [k for k in ext if k.startswith("nokia.")]
-            assert len(nokia_keys) > 0, (
-                f"Record from pgw-01 has no nokia.* keys: {ext}"
-            )
+            assert len(nokia_keys) > 0, f"Record from pgw-01 has no nokia.* keys: {ext}"
 
     def test_huawei_extensions_present(self, phase3_output):
         """Records from Huawei NE (msc-02) should have vendor_extensions
@@ -381,9 +388,9 @@ class TestPhase3VendorExtensions:
         _, records, _, _ = phase3_output
 
         huawei_records = [
-            r for r in records
-            if r.get("serving_ne_id") == "msc-02"
-            and r.get("vendor_extensions", "")
+            r
+            for r in records
+            if r.get("serving_ne_id") == "msc-02" and r.get("vendor_extensions", "")
         ]
 
         if not huawei_records:
@@ -401,9 +408,7 @@ class TestPhase3VendorExtensions:
         """Every non-empty vendor_extensions field must be valid base64-encoded JSON."""
         _, records, _, _ = phase3_output
 
-        records_with_ext = [
-            r for r in records if r.get("vendor_extensions", "")
-        ]
+        records_with_ext = [r for r in records if r.get("vendor_extensions", "")]
 
         if not records_with_ext:
             pytest.skip("No records with vendor_extensions")
@@ -430,7 +435,8 @@ class TestPhase3VendorExtensions:
         _, records, _, _ = phase3_output
 
         ericsson_records = [
-            r for r in records
+            r
+            for r in records
             if r.get("serving_ne_id") in ("msc-01", "smsc-01")
             and r.get("vendor_extensions", "")
             and r.get("first_cell_id", "")
@@ -458,15 +464,14 @@ class TestPhase3VendorExtensions:
 # Test: Record integrity and timestamp validation
 # ---------------------------------------------------------------------------
 
+
 class TestPhase3RecordIntegrity:
     """Verify fundamental record correctness across the generated output."""
 
     def test_all_records_have_imsi(self, phase3_output):
         """Every CDR record must have a non-empty served_imsi."""
         _, records, _, _ = phase3_output
-        missing = [
-            r["record_type"] for r in records if not r.get("served_imsi", "")
-        ]
+        missing = [r["record_type"] for r in records if not r.get("served_imsi", "")]
         assert len(missing) == 0, (
             f"{len(missing)} records missing served_imsi: types={Counter(missing)}"
         )
@@ -474,12 +479,8 @@ class TestPhase3RecordIntegrity:
     def test_all_records_have_serving_ne(self, phase3_output):
         """Every CDR record must have a non-empty serving_ne_id."""
         _, records, _, _ = phase3_output
-        missing = [
-            r["record_type"] for r in records if not r.get("serving_ne_id", "")
-        ]
-        assert len(missing) == 0, (
-            f"{len(missing)} records missing serving_ne_id"
-        )
+        missing = [r["record_type"] for r in records if not r.get("serving_ne_id", "")]
+        assert len(missing) == 0, f"{len(missing)} records missing serving_ne_id"
 
     def test_timestamps_in_configured_range(self, phase3_output):
         """All event_timestamps must fall within the configured time range
@@ -492,6 +493,7 @@ class TestPhase3RecordIntegrity:
         # Allow generous tolerance for SMS delivery delays (up to 24h in config)
         # and MT timestamp jitter
         from datetime import timedelta
+
         tolerance = timedelta(hours=25)
 
         early = []
@@ -508,9 +510,7 @@ class TestPhase3RecordIntegrity:
             if ts > end + tolerance:
                 late.append((rec["record_type"], ts_str))
 
-        assert len(early) == 0, (
-            f"{len(early)} records before start time: {early[:5]}"
-        )
+        assert len(early) == 0, f"{len(early)} records before start time: {early[:5]}"
         assert len(late) == 0, (
             f"{len(late)} records after end time + tolerance: {late[:5]}"
         )
@@ -521,7 +521,8 @@ class TestPhase3RecordIntegrity:
         _, records, _, _ = phase3_output
 
         voice_records = [
-            r for r in records
+            r
+            for r in records
             if r["record_type"] in ("mo_call", "mt_call")
             and r.get("consolidation_id", "")
         ]
@@ -537,12 +538,10 @@ class TestPhase3RecordIntegrity:
 
         # At least some consolidation_ids should have both MO and MT
         paired = sum(
-            1 for types in by_cid.values()
-            if "mo_call" in types and "mt_call" in types
+            1 for types in by_cid.values() if "mo_call" in types and "mt_call" in types
         )
         assert paired > 0, (
-            f"No paired MO+MT voice records found among "
-            f"{len(by_cid)} consolidation_ids"
+            f"No paired MO+MT voice records found among {len(by_cid)} consolidation_ids"
         )
 
     def test_data_sgw_pgw_pairing(self, phase3_output):
@@ -551,16 +550,20 @@ class TestPhase3RecordIntegrity:
         _, records, _, _ = phase3_output
 
         data_records = [
-            r for r in records
-            if r["record_type"] in ("sgw_data", "pgw_data")
-            and r.get("charging_id", "")
+            r
+            for r in records
+            if r["record_type"] in ("sgw_data", "pgw_data") and r.get("charging_id", "")
         ]
 
         if len(data_records) < 4:
             pytest.skip("Too few data records for pairing test")
 
-        sgw_ids = {r["charging_id"] for r in data_records if r["record_type"] == "sgw_data"}
-        pgw_ids = {r["charging_id"] for r in data_records if r["record_type"] == "pgw_data"}
+        sgw_ids = {
+            r["charging_id"] for r in data_records if r["record_type"] == "sgw_data"
+        }
+        pgw_ids = {
+            r["charging_id"] for r in data_records if r["record_type"] == "pgw_data"
+        }
 
         assert sgw_ids == pgw_ids, (
             f"SGW and PGW charging_ids do not match.\n"

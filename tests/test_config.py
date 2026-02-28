@@ -58,7 +58,9 @@ class TestLoadValidConfig:
         assert config.subscribers.total_count == 10000
         assert len(config.subscribers.profiles) == 4
 
-    def test_loaded_config_has_network_elements(self, sample_config_path: pathlib.Path) -> None:
+    def test_loaded_config_has_network_elements(
+        self, sample_config_path: pathlib.Path
+    ) -> None:
         """All 5 NEs from reference config are present."""
         from cdr_generator.config.loader import load_config
 
@@ -73,7 +75,9 @@ class TestLoadValidConfig:
         config = load_config(sample_config_path)
         assert len(config.network.cells.items) == 5
 
-    def test_loaded_config_profile_names(self, sample_config_path: pathlib.Path) -> None:
+    def test_loaded_config_profile_names(
+        self, sample_config_path: pathlib.Path
+    ) -> None:
         """Four profile names match the YAML."""
         from cdr_generator.config.loader import load_config
 
@@ -91,7 +95,9 @@ class TestLoadValidConfig:
         assert config.meta.time_range.start.day == 1
         assert config.meta.time_range.end.day == 31
 
-    def test_loaded_config_special_events(self, sample_config_path: pathlib.Path) -> None:
+    def test_loaded_config_special_events(
+        self, sample_config_path: pathlib.Path
+    ) -> None:
         """Reference config has 3 special events."""
         from cdr_generator.config.loader import load_config
 
@@ -100,7 +106,9 @@ class TestLoadValidConfig:
         event_names = {e.name for e in config.special_events}
         assert "new_year_midnight" in event_names
 
-    def test_loaded_config_anomalies_enabled(self, sample_config_path: pathlib.Path) -> None:
+    def test_loaded_config_anomalies_enabled(
+        self, sample_config_path: pathlib.Path
+    ) -> None:
         """Reference config has anomalies enabled with correct sub-config rates."""
         from cdr_generator.config.loader import load_config
 
@@ -384,7 +392,9 @@ class TestLoadConfigInvalidDowMultipliers:
         from cdr_generator.config.loader import load_config
 
         cfg = copy.deepcopy(minimal_valid_config_dict)
-        cfg["subscribers"]["profiles"][0]["day_of_week_multipliers"]["voice"] = [1.0] * 6
+        cfg["subscribers"]["profiles"][0]["day_of_week_multipliers"]["voice"] = [
+            1.0
+        ] * 6
 
         with pytest.raises(Exception):
             load_config(tmp_config_file(cfg))
@@ -444,11 +454,13 @@ class TestApplyOverridesSimple:
         """Multiple overrides all apply simultaneously."""
         from cdr_generator.config.loader import load_config, parse_override_strings
 
-        overrides = parse_override_strings([
-            "subscribers.total_count=50",
-            "meta.seed=7",
-            "meta.parallelism.workers=2",
-        ])
+        overrides = parse_override_strings(
+            [
+                "subscribers.total_count=50",
+                "meta.seed=7",
+                "meta.parallelism.workers=2",
+            ]
+        )
         config = load_config(sample_config_path, overrides=overrides)
         assert config.subscribers.total_count == 50
         assert config.meta.seed == 7
@@ -470,7 +482,9 @@ class TestApplyOverridesNested:
         config = load_config(sample_config_path, overrides=overrides)
         assert config.meta.time_range.end.day == 2
 
-    def test_override_voice_success_rate(self, sample_config_path: pathlib.Path) -> None:
+    def test_override_voice_success_rate(
+        self, sample_config_path: pathlib.Path
+    ) -> None:
         from cdr_generator.config.loader import load_config, parse_override_strings
 
         overrides = parse_override_strings(["events.voice.success_rate=0.5"])
@@ -530,7 +544,10 @@ class TestConfigModelsValidation:
                 total_count=-5,
                 profiles=[],
             )
-        assert "total_count" in str(exc_info.value) or "greater" in str(exc_info.value).lower()
+        assert (
+            "total_count" in str(exc_info.value)
+            or "greater" in str(exc_info.value).lower()
+        )
 
     def test_zero_total_count(self) -> None:
         """SubscribersConfig rejects total_count=0."""
@@ -544,7 +561,10 @@ class TestConfigModelsValidation:
                 start="2025-01-02T00:00:00Z",
                 end="2025-01-01T00:00:00Z",
             )
-        assert "end" in str(exc_info.value).lower() or "after" in str(exc_info.value).lower()
+        assert (
+            "end" in str(exc_info.value).lower()
+            or "after" in str(exc_info.value).lower()
+        )
 
     def test_success_rate_above_1(self) -> None:
         """VoiceEventConfig rejects success_rate > 1.0."""
@@ -552,7 +572,10 @@ class TestConfigModelsValidation:
             VoiceEventConfig(
                 success_rate=1.5,
                 duration={
-                    "distribution": {"type": "lognormal", "params": {"mu": 4, "sigma": 1}},
+                    "distribution": {
+                        "type": "lognormal",
+                        "params": {"mu": 4, "sigma": 1},
+                    },
                     "min_seconds": 1,
                 },
             )
@@ -563,7 +586,10 @@ class TestConfigModelsValidation:
             VoiceEventConfig(
                 success_rate=-0.1,
                 duration={
-                    "distribution": {"type": "lognormal", "params": {"mu": 4, "sigma": 1}},
+                    "distribution": {
+                        "type": "lognormal",
+                        "params": {"mu": 4, "sigma": 1},
+                    },
                     "min_seconds": 1,
                 },
             )
@@ -581,7 +607,9 @@ class TestConfigModelsValidation:
         config = CDRGeneratorConfig(**sample_config_dict)
         assert config.meta.seed == 42
 
-    def test_valid_config_from_minimal_dict(self, minimal_valid_config_dict: dict) -> None:
+    def test_valid_config_from_minimal_dict(
+        self, minimal_valid_config_dict: dict
+    ) -> None:
         """Minimal config dict passes Pydantic validation directly."""
         config = CDRGeneratorConfig(**minimal_valid_config_dict)
         assert config.subscribers.total_count == 100

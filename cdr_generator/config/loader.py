@@ -52,7 +52,9 @@ def load_config(
         raise ConfigLoadError(msg) from exc
 
     if not isinstance(config_dict, dict):
-        raise ConfigLoadError(f"Expected a YAML mapping at top level, got {type(config_dict).__name__}")
+        raise ConfigLoadError(
+            f"Expected a YAML mapping at top level, got {type(config_dict).__name__}"
+        )
 
     # 2. JSON Schema validation (optional -- skipped when schema is empty)
     _validate_json_schema(config_dict)
@@ -92,7 +94,9 @@ def validate_config(path: Path) -> list[str]:
         return [str(exc)]
 
 
-def apply_overrides(config_dict: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+def apply_overrides(
+    config_dict: dict[str, Any], overrides: dict[str, Any]
+) -> dict[str, Any]:
     """Apply dot-path overrides to a raw config dict.
 
     Example:
@@ -107,8 +111,7 @@ def apply_overrides(config_dict: dict[str, Any], overrides: dict[str, Any]) -> d
         for part in parts[:-1]:
             if not isinstance(target, dict) or part not in target:
                 raise ValueError(
-                    f"Override path not found: {dot_path!r} "
-                    f"(missing key {part!r})"
+                    f"Override path not found: {dot_path!r} (missing key {part!r})"
                 )
             target = target[part]
 
@@ -127,7 +130,9 @@ def apply_overrides(config_dict: dict[str, Any], overrides: dict[str, Any]) -> d
     return config_dict
 
 
-def parse_override_strings(override_strings: tuple[str, ...] | list[str]) -> dict[str, Any]:
+def parse_override_strings(
+    override_strings: tuple[str, ...] | list[str],
+) -> dict[str, Any]:
     """Parse CLI ``--override key=value`` strings into a dict.
 
     Each string must be in the form ``dot.path=value``.
@@ -172,7 +177,11 @@ def _validate_json_schema(config_dict: dict[str, Any]) -> None:
     try:
         jsonschema.validate(instance=config_dict, schema=schema)
     except jsonschema.ValidationError as exc:
-        json_path = "$.%s" % ".".join(str(p) for p in exc.absolute_path) if exc.absolute_path else "$"
+        json_path = (
+            "$.%s" % ".".join(str(p) for p in exc.absolute_path)
+            if exc.absolute_path
+            else "$"
+        )
         raise ConfigLoadError(
             f"JSON Schema validation error at {json_path}: {exc.message}"
         ) from exc

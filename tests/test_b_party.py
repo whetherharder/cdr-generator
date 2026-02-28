@@ -18,6 +18,7 @@ from cdr_generator.assets.models import Subscriber
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def _make_subscribers(n: int) -> list[Subscriber]:
     """Create n test subscribers."""
     subs = []
@@ -46,7 +47,10 @@ def contact_book_config() -> dict:
     """Contact book / B-party selection config dict."""
     return {
         "avg_contacts": 15,
-        "degree_distribution": {"type": "zipf", "params": {"a": 2.0, "min": 3, "max": 100}},
+        "degree_distribution": {
+            "type": "zipf",
+            "params": {"a": 2.0, "min": 3, "max": 100},
+        },
         "asymmetric": True,
         "intra_profile_bias": 1.5,
         "repeat_call_probability": 0.6,
@@ -75,6 +79,7 @@ def rng() -> np.random.Generator:
 # B-party selection: basic functionality
 # ===================================================================
 
+
 class TestBPartySelection:
     """select_b_party returns a valid BPartyResult."""
 
@@ -90,7 +95,12 @@ class TestBPartySelection:
         a_party = subscribers_100[0]
 
         result = select_b_party(
-            a_party, book, subscribers_100, ext_numbers, contact_book_config, rng,
+            a_party,
+            book,
+            subscribers_100,
+            ext_numbers,
+            contact_book_config,
+            rng,
         )
 
         assert isinstance(result, BPartyResult)
@@ -116,7 +126,12 @@ class TestBPartySelection:
         for i in range(total):
             iter_rng = np.random.default_rng(i)
             result = select_b_party(
-                a_party, book, subscribers_100, ext_numbers, contact_book_config, iter_rng,
+                a_party,
+                book,
+                subscribers_100,
+                ext_numbers,
+                contact_book_config,
+                iter_rng,
             )
             if result.subscriber is not None and result.subscriber.imsi == a_party.imsi:
                 same_count += 1
@@ -129,6 +144,7 @@ class TestBPartySelection:
 # ===================================================================
 # B-party distribution: ~60% contact, ~15% external, ~25% random
 # ===================================================================
+
 
 class TestBPartyDistribution:
     """Verify the statistical distribution of B-party selection sources."""
@@ -152,7 +168,12 @@ class TestBPartyDistribution:
         for i in range(n_trials):
             iter_rng = np.random.default_rng(i + 5000)
             result = select_b_party(
-                a_party, book, subscribers_100, ext_numbers, contact_book_config, iter_rng,
+                a_party,
+                book,
+                subscribers_100,
+                ext_numbers,
+                contact_book_config,
+                iter_rng,
             )
             sources[result.source] += 1
 
@@ -180,12 +201,11 @@ class TestBPartyDistribution:
 # External number pool
 # ===================================================================
 
+
 class TestExternalNumberPool:
     """External number pool generation produces valid phone numbers."""
 
-    def test_pool_has_correct_count(
-        self, external_numbers_config, rng
-    ) -> None:
+    def test_pool_has_correct_count(self, external_numbers_config, rng) -> None:
         from cdr_generator.assets.external_numbers import generate_external_numbers
 
         pool = generate_external_numbers(external_numbers_config, rng)

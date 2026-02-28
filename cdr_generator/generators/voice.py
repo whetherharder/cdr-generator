@@ -48,16 +48,30 @@ def generate_voice_cdr(
     success_rate = voice_cfg.get("success_rate", 0.85)
     is_success = rng.random() < success_rate
 
-    consolidation_id = uuid.UUID(bytes=bytes(rng.integers(0, 256, size=16, dtype="uint8"))).hex
+    consolidation_id = uuid.UUID(
+        bytes=bytes(rng.integers(0, 256, size=16, dtype="uint8"))
+    ).hex
 
     if not is_success:
         return _generate_failed_call(
-            caller, callee, event_time, cell, msc, voice_cfg, rng,
+            caller,
+            callee,
+            event_time,
+            cell,
+            msc,
+            voice_cfg,
+            rng,
             consolidation_id,
         )
 
     return _generate_successful_call(
-        caller, callee, event_time, cell, msc, voice_cfg, rng,
+        caller,
+        callee,
+        event_time,
+        cell,
+        msc,
+        voice_cfg,
+        rng,
         consolidation_id,
     )
 

@@ -35,9 +35,16 @@ def save_assets(
     """
     assets_dir.mkdir(parents=True, exist_ok=True)
 
-    _write_json(assets_dir / _CELLS_FILE, _CellListAdapter.dump_python(cells, mode="json"))
-    _write_json(assets_dir / _NE_FILE, _NEListAdapter.dump_python(network_elements, mode="json"))
-    _write_json(assets_dir / _SUBSCRIBERS_FILE, _SubscriberListAdapter.dump_python(subscribers, mode="json"))
+    _write_json(
+        assets_dir / _CELLS_FILE, _CellListAdapter.dump_python(cells, mode="json")
+    )
+    _write_json(
+        assets_dir / _NE_FILE, _NEListAdapter.dump_python(network_elements, mode="json")
+    )
+    _write_json(
+        assets_dir / _SUBSCRIBERS_FILE,
+        _SubscriberListAdapter.dump_python(subscribers, mode="json"),
+    )
 
     manifest = AssetManifest(
         config_hash=config_hash,
@@ -58,7 +65,9 @@ def load_assets(
     """
     cells = _CellListAdapter.validate_python(_read_json(assets_dir / _CELLS_FILE))
     network_elements = _NEListAdapter.validate_python(_read_json(assets_dir / _NE_FILE))
-    subscribers = _SubscriberListAdapter.validate_python(_read_json(assets_dir / _SUBSCRIBERS_FILE))
+    subscribers = _SubscriberListAdapter.validate_python(
+        _read_json(assets_dir / _SUBSCRIBERS_FILE)
+    )
     manifest = AssetManifest.model_validate(_read_json(assets_dir / _MANIFEST_FILE))
     return cells, network_elements, subscribers, manifest
 
@@ -123,7 +132,9 @@ def compute_config_hash(config_path: Path) -> str:
 
 
 def _write_json(path: Path, data: Any) -> None:
-    path.write_text(json.dumps(data, indent=2, default=str, ensure_ascii=False), encoding="utf-8")
+    path.write_text(
+        json.dumps(data, indent=2, default=str, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 def _read_json(path: Path) -> Any:

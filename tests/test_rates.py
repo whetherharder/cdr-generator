@@ -44,10 +44,32 @@ class TestEffectiveRateNormalized:
 
     def test_non_uniform_weights_normalized(self) -> None:
         """Multiplying all weights by 10x must not change the result."""
-        hourly_w = [0.01, 0.01, 0.01, 0.01, 0.02, 0.03,
-                    0.05, 0.08, 0.10, 0.12, 0.11, 0.10,
-                    0.08, 0.09, 0.10, 0.10, 0.08, 0.06,
-                    0.05, 0.04, 0.03, 0.02, 0.01, 0.01]
+        hourly_w = [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.02,
+            0.03,
+            0.05,
+            0.08,
+            0.10,
+            0.12,
+            0.11,
+            0.10,
+            0.08,
+            0.09,
+            0.10,
+            0.10,
+            0.08,
+            0.06,
+            0.05,
+            0.04,
+            0.03,
+            0.02,
+            0.01,
+            0.01,
+        ]
         hourly_w_10x = [w * 10 for w in hourly_w]
         dow_mult = [1.0] * 7
 
@@ -75,17 +97,39 @@ class TestHourlyWeightApplied:
 
     def test_peak_vs_offpeak(self) -> None:
         """Hour with weight 0.12 must produce higher rate than hour with weight 0.01."""
-        hourly_w = [0.01, 0.01, 0.01, 0.01, 0.02, 0.03,
-                    0.05, 0.08, 0.10, 0.12, 0.11, 0.10,
-                    0.08, 0.09, 0.10, 0.10, 0.08, 0.06,
-                    0.05, 0.04, 0.03, 0.02, 0.01, 0.01]
+        hourly_w = [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.02,
+            0.03,
+            0.05,
+            0.08,
+            0.10,
+            0.12,
+            0.11,
+            0.10,
+            0.08,
+            0.09,
+            0.10,
+            0.10,
+            0.08,
+            0.06,
+            0.05,
+            0.04,
+            0.03,
+            0.02,
+            0.01,
+            0.01,
+        ]
         dow_mult = [1.0] * 7
 
         rate_peak = effective_rate(
             base_lambda=3.5,
             hourly_weights=hourly_w,
             dow_multipliers=dow_mult,
-            hour=9,   # weight 0.12
+            hour=9,  # weight 0.12
             dow=0,
             time_step_seconds=60,
         )
@@ -93,7 +137,7 @@ class TestHourlyWeightApplied:
             base_lambda=3.5,
             hourly_weights=hourly_w,
             dow_multipliers=dow_mult,
-            hour=0,   # weight 0.01
+            hour=0,  # weight 0.01
             dow=0,
             time_step_seconds=60,
         )
@@ -104,7 +148,7 @@ class TestHourlyWeightApplied:
     def test_proportional_to_weight(self) -> None:
         """Rate ratio between two hours should match their weight ratio."""
         hourly_w = [0.0] * 24
-        hourly_w[6] = 1.0   # hour 6 gets weight 1
+        hourly_w[6] = 1.0  # hour 6 gets weight 1
         hourly_w[18] = 3.0  # hour 18 gets weight 3
         dow_mult = [1.0] * 7
 

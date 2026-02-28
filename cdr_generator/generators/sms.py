@@ -49,7 +49,9 @@ def generate_sms_cdr(
     success_rate = sms_cfg.get("delivery_success_rate", 0.97)
     is_success = rng.random() < success_rate
 
-    consolidation_id = uuid.UUID(bytes=bytes(rng.integers(0, 256, size=16, dtype="uint8"))).hex
+    consolidation_id = uuid.UUID(
+        bytes=bytes(rng.integers(0, 256, size=16, dtype="uint8"))
+    ).hex
 
     mo = CDRRecord(
         record_type="mo_sms",
