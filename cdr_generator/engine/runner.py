@@ -112,9 +112,17 @@ def run_generation(
     ext_numbers_cfg = config.subscribers.external_numbers.model_dump()
     external_numbers = generate_external_numbers(ext_numbers_cfg, np_rng)
 
-    # Time range
-    start_dt = config.meta.time_range.start.replace(tzinfo=timezone.utc)
-    end_dt = config.meta.time_range.end.replace(tzinfo=timezone.utc)
+    # Time range — convert to UTC if tz-aware, assume UTC if naive
+    _start = config.meta.time_range.start
+    _end = config.meta.time_range.end
+    if _start.tzinfo is not None:
+        start_dt = _start.astimezone(timezone.utc)
+    else:
+        start_dt = _start.replace(tzinfo=timezone.utc)
+    if _end.tzinfo is not None:
+        end_dt = _end.astimezone(timezone.utc)
+    else:
+        end_dt = _end.replace(tzinfo=timezone.utc)
     step_seconds = config.meta.time_step_seconds
 
     # Date range for output file bucketing — clamp any spillover records
@@ -351,6 +359,17 @@ def run_generation(
             # --- Data session ---
             sgw_ne = tac_to_ne["sgw"].get(home_tac)
             if n_data > 0 and sgw_ne is not None and pgw_ne is not None:
+                # Apply profile volume multipliers if configured
+                step_data_cfg = data_cfg
+                vol_mults = data_cfg.get("profile_volume_multipliers", {})
+                if sub.profile_name in vol_mults:
+                    mult = vol_mults[sub.profile_name]
+                    step_data_cfg = dict(data_cfg)
+                    step_data_cfg["_volume_multiplier_uplink"] = mult.get("uplink", 1.0)
+                    step_data_cfg["_volume_multiplier_downlink"] = mult.get(
+                        "downlink", 1.0
+                    )
+
                 for _ in range(n_data):
                     cdrs = generate_data_cdr(
                         subscriber=sub,
@@ -358,7 +377,7 @@ def run_generation(
                         cell=cell,
                         sgw=sgw_ne,
                         pgw=pgw_ne,
-                        data_cfg=data_cfg,
+                        data_cfg=step_data_cfg,
                         rng=np_rng,
                     )
                     for cdr in cdrs:
@@ -384,7 +403,13 @@ def run_generation(
     combined_anomaly_stats = AnomalyStats()
 
     # Write output files: sort records and write per (NE, date)
-    writer = CsvWriter(output_dir=output_dir)
+    output_cfg = config.meta.output
+    writer = CsvWriter(
+        output_dir=output_dir,
+        delimiter=output_cfg.csv_delimiter,
+        include_metadata=output_cfg.include_metadata_comment,
+        filename_template=output_cfg.filename_template,
+    )
 
     for (ne_id, file_date), records in sorted(records_by_ne_date.items()):
         # Apply anomaly pipeline per (ne_id, date) batch

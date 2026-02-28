@@ -76,7 +76,7 @@ def load_config(
             loc = ".".join(str(p) for p in err["loc"])
             errors.append(f"  {loc}: {err['msg']}")
         raise ConfigLoadError(
-            f"Config validation failed:\n" + "\n".join(errors)
+            "Config validation failed:\n" + "\n".join(errors)
         ) from exc
 
 

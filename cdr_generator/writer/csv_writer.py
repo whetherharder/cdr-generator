@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import gzip
-import io
 from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -102,10 +101,12 @@ class CsvWriter:
         output_dir: str | Path,
         delimiter: str = ",",
         include_metadata: bool = True,
+        filename_template: str = "CDR_{ne_id}_{date}.csv.gz",
     ) -> None:
         self._output_dir = Path(output_dir)
         self._delimiter = delimiter
         self._include_metadata = include_metadata
+        self._filename_template = filename_template
 
     def write_file(
         self,
@@ -119,7 +120,10 @@ class CsvWriter:
         the CSV header, and any *records*.  Returns the file path.
         """
         date_str = file_date.strftime("%Y%m%d")
-        file_path = self._output_dir / ne_id / f"CDR_{ne_id}_{date_str}.csv.gz"
+        filename = self._filename_template.replace("{ne_id}", ne_id).replace(
+            "{date}", date_str
+        )
+        file_path = self._output_dir / ne_id / filename
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         with gzip.open(file_path, "wt", encoding="utf-8", newline="") as gz:

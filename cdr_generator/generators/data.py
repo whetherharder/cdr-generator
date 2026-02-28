@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import uuid
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -55,9 +54,16 @@ def generate_data_cdr(
     # Sample session duration
     duration = _sample_data_duration(data_cfg, rng)
 
-    # Sample total volumes
+    # Sample total volumes and apply profile volume multipliers
     uplink_bytes = _sample_volume(data_cfg["volume_uplink"], rng)
     downlink_bytes = _sample_volume(data_cfg["volume_downlink"], rng)
+
+    ul_mult = data_cfg.get("_volume_multiplier_uplink", 1.0)
+    dl_mult = data_cfg.get("_volume_multiplier_downlink", 1.0)
+    if ul_mult != 1.0:
+        uplink_bytes = max(1, int(uplink_bytes * ul_mult))
+    if dl_mult != 1.0:
+        downlink_bytes = max(1, int(downlink_bytes * dl_mult))
 
     # Pick APN
     apn = _pick_apn(data_cfg, rng)

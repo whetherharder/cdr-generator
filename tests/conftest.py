@@ -1,6 +1,5 @@
 """Shared test fixtures for CDR Generator tests."""
 
-import copy
 import pathlib
 from typing import Any, Callable
 
