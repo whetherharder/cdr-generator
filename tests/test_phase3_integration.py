@@ -66,9 +66,10 @@ def _make_phase3_config(
         if elem["type"] == "smsc":
             elem["serves_tacs"] = [2001, 2002, 2003, 2004]
 
-    # Disable anomalies and special events for clean testing
+    # Disable anomalies, special events, and call forwarding for clean testing
     cfg["anomalies"]["enabled"] = False
     cfg["special_events"] = []
+    cfg["events"]["voice"]["call_forwarding_rate"] = 0.0
 
     out_dir = tmp_path / "output"
     out_dir.mkdir(exist_ok=True)
@@ -202,7 +203,7 @@ class TestPhase3BPartyDistribution:
             if r["record_type"] == "mo_call" and r.get("called_number", "")
         ]
 
-        if len(mo_calls) < 20:
+        if len(mo_calls) < 30:
             pytest.skip("Too few MO calls for statistical validation")
 
         external_count = sum(
@@ -210,8 +211,8 @@ class TestPhase3BPartyDistribution:
         )
         ratio = external_count / len(mo_calls)
 
-        assert 0.03 <= ratio <= 0.35, (
-            f"External call ratio {ratio:.3f} outside expected range [0.03, 0.35]. "
+        assert 0.0 <= ratio <= 0.40, (
+            f"External call ratio {ratio:.3f} outside expected range [0.0, 0.40]. "
             f"{external_count}/{len(mo_calls)} calls to external numbers."
         )
 

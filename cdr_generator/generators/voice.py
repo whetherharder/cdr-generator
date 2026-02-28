@@ -19,6 +19,7 @@ def generate_voice_cdr(
     msc: NetworkElement,
     voice_cfg: dict,
     rng: np.random.Generator,
+    forward_target: Subscriber | None = None,
 ) -> list[CDRRecord]:
     """Generate voice CDR records for a single call attempt.
 
@@ -38,12 +39,16 @@ def generate_voice_cdr(
         Voice event configuration dict (from config.events.voice).
     rng:
         Numpy random generator for deterministic sampling.
+    forward_target:
+        Optional C-party subscriber for call forwarding. If None,
+        forwarding cannot occur even if call_forwarding_rate > 0.
 
     Returns
     -------
     list[CDRRecord]
         One record (MO only) for failed calls, two records (MO + MT) for
-        successful calls. MO and MT share a consolidation_id.
+        successful non-forwarded calls, three records (MO + MT-fwd + MT-final)
+        for forwarded calls. All records share a consolidation_id.
     """
     success_rate = voice_cfg.get("success_rate", 0.85)
     is_success = rng.random() < success_rate
@@ -56,6 +61,23 @@ def generate_voice_cdr(
         return _generate_failed_call(
             caller,
             callee,
+            event_time,
+            cell,
+            msc,
+            voice_cfg,
+            rng,
+            consolidation_id,
+        )
+
+    # Check for call forwarding (only on successful calls with a target)
+    forwarding_rate = voice_cfg.get("call_forwarding_rate", 0.03)
+    is_forwarded = forward_target is not None and rng.random() < forwarding_rate
+
+    if is_forwarded:
+        return _generate_forwarded_call(
+            caller,
+            callee,
+            forward_target,
             event_time,
             cell,
             msc,
@@ -169,6 +191,103 @@ def _generate_successful_call(
     )
 
     return [mo, mt]
+
+
+def _generate_forwarded_call(
+    caller: Subscriber,
+    callee: Subscriber,
+    forward_target: Subscriber,
+    event_time: datetime,
+    cell: Cell,
+    msc: NetworkElement,
+    voice_cfg: dict,
+    rng: np.random.Generator,
+    consolidation_id: str,
+) -> list[CDRRecord]:
+    """Generate MO + MT-forwarding + MT-final CDR triple for a forwarded call.
+
+    A forwarded call produces three CDRs:
+    1. MO (A->B): caller initiates, same as normal MO.
+    2. MT forwarding (B): served by callee, with redirecting_number=C.
+    3. MT final (C): served by forward_target, the actual answerer.
+
+    All three share the same consolidation_id.
+    """
+    duration = _sample_duration(voice_cfg, rng)
+    cause_code = _pick_normal_termination(voice_cfg, rng)
+    jitter_ms = voice_cfg.get("paired_timestamp_jitter_ms", 1000)
+
+    mt_jitter = timedelta(milliseconds=int(rng.integers(0, max(1, jitter_ms))))
+    mt_event_time = event_time + mt_jitter
+
+    answer_time = event_time + timedelta(seconds=1)
+    release_time = answer_time + timedelta(seconds=duration)
+
+    # 1. MO record: A calls B (same as normal MO)
+    mo = CDRRecord(
+        record_type="mo_call",
+        served_imsi=caller.imsi,
+        served_msisdn=caller.msisdn,
+        served_imei=caller.imei,
+        event_timestamp=event_time,
+        answer_timestamp=answer_time,
+        release_timestamp=release_time,
+        calling_number=caller.msisdn,
+        called_number=callee.msisdn,
+        duration_seconds=duration,
+        cause_for_termination=cause_code,
+        first_cell_id=cell.cell_id,
+        last_cell_id=cell.cell_id,
+        serving_ne_id=msc.id,
+        consolidation_id=consolidation_id,
+        rat_type="eutran",
+    )
+
+    # 2. MT forwarding record: served by B, redirecting to C
+    mt_fwd = CDRRecord(
+        record_type="mt_call",
+        served_imsi=callee.imsi,
+        served_msisdn=callee.msisdn,
+        served_imei=callee.imei,
+        event_timestamp=mt_event_time,
+        answer_timestamp=answer_time + mt_jitter,
+        release_timestamp=release_time + mt_jitter,
+        calling_number=caller.msisdn,
+        called_number=callee.msisdn,
+        duration_seconds=duration,
+        cause_for_termination=cause_code,
+        first_cell_id=callee.home_cell_id,
+        last_cell_id=callee.home_cell_id,
+        serving_ne_id=msc.id,
+        consolidation_id=consolidation_id,
+        redirecting_number=forward_target.msisdn,
+        rat_type="eutran",
+    )
+
+    # 3. MT final record: served by C (forward target)
+    mt_final_jitter = timedelta(milliseconds=int(rng.integers(0, max(1, jitter_ms))))
+    mt_final_event_time = event_time + mt_final_jitter
+
+    mt_final = CDRRecord(
+        record_type="mt_call",
+        served_imsi=forward_target.imsi,
+        served_msisdn=forward_target.msisdn,
+        served_imei=forward_target.imei,
+        event_timestamp=mt_final_event_time,
+        answer_timestamp=answer_time + mt_final_jitter,
+        release_timestamp=release_time + mt_final_jitter,
+        calling_number=caller.msisdn,
+        called_number=forward_target.msisdn,
+        duration_seconds=duration,
+        cause_for_termination=cause_code,
+        first_cell_id=forward_target.home_cell_id,
+        last_cell_id=forward_target.home_cell_id,
+        serving_ne_id=msc.id,
+        consolidation_id=consolidation_id,
+        rat_type="eutran",
+    )
+
+    return [mo, mt_fwd, mt_final]
 
 
 def _sample_duration(voice_cfg: dict, rng: np.random.Generator) -> float:

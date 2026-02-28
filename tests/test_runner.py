@@ -240,10 +240,11 @@ class TestMoMtPairsComplete:
                 continue
             by_cid.setdefault(cid, []).append(rec["record_type"])
 
-        # Each consolidation_id should have exactly 1 MO + 1 MT
+        # Each consolidation_id should have 1 MO + 1 MT (normal call)
+        # or 1 MO + 2 MT (forwarded call — Phase 5)
         for cid, types in by_cid.items():
             assert "mo_call" in types, f"consolidation_id={cid} missing MO record"
             assert "mt_call" in types, f"consolidation_id={cid} missing MT record"
-            assert len(types) == 2, (
-                f"consolidation_id={cid} should have 2 records, got {len(types)}: {types}"
+            assert len(types) in (2, 3), (
+                f"consolidation_id={cid} should have 2 or 3 records, got {len(types)}: {types}"
             )
