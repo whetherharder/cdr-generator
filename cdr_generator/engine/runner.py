@@ -21,6 +21,7 @@ from cdr_generator.assets.models import NetworkElement, Subscriber
 from cdr_generator.config.models import CDRGeneratorConfig
 from cdr_generator.engine.anomalies import AnomalyPipeline, AnomalyStats
 from cdr_generator.engine.b_party import BPartyResult, select_b_party
+from cdr_generator.engine.concurrency import enforce_concurrency
 from cdr_generator.engine.mobility import resolve_position
 from cdr_generator.engine.poisson import sample_count
 from cdr_generator.engine.rates import effective_rate
@@ -166,7 +167,8 @@ def run_generation(
             )
             cell = cells_by_id.get(first_cell_id, home_cell)
 
-            # Phase 4: Handle disabled cells — relocate to overflow or skip
+            # Phase 4/5: Handle disabled cells — relocate to overflow or
+            # generate a failed CDR with cause_code=38
             if effects.is_cell_disabled(first_cell_id):
                 overflow_cell_id = effects.pick_overflow_cell(np_rng)
                 if overflow_cell_id is not None:
@@ -178,11 +180,34 @@ def run_generation(
                     else:
                         continue  # overflow cell not found, skip subscriber
                 else:
-                    continue  # no overflow available, skip subscriber
+                    # Phase 5: No overflow — generate failed CDR with cause_code=38
+                    msc_ne = tac_to_ne["msc"].get(home_cell.tac)
+                    if msc_ne is not None:
+                        failed_cdr = CDRRecord(
+                            record_type="mo_call",
+                            served_imsi=sub.imsi,
+                            served_msisdn=sub.msisdn,
+                            served_imei=sub.imei,
+                            event_timestamp=current,
+                            calling_number=sub.msisdn,
+                            called_number="",
+                            duration_seconds=0.0,
+                            cause_for_termination=38,
+                            first_cell_id=first_cell_id,
+                            last_cell_id=first_cell_id,
+                            serving_ne_id=msc_ne.id,
+                            rat_type="eutran",
+                        )
+                        ne_id = failed_cdr.serving_ne_id
+                        cdr_date = failed_cdr.event_timestamp.date()
+                        records_by_ne_date[(ne_id, cdr_date)].append(failed_cdr)
+                        stats.voice_records += 1
+                        stats.total_records += 1
+                    continue  # skip normal event generation for this subscriber
 
             home_tac = cell.tac
 
-            # --- Voice MO ---
+            # --- Compute event counts ---
             mo_call_lambda = profile.daily_rates.mo_call.params.get("lambda", 0)
             voice_rate = effective_rate(
                 base_lambda=mo_call_lambda,
@@ -192,9 +217,39 @@ def run_generation(
                 dow=dow,
                 time_step_seconds=step_seconds,
             )
-            # Phase 4: Apply special event voice rate multiplier
             voice_rate *= effects.voice_rate_multiplier
             n_voice = sample_count(voice_rate, np_rng)
+
+            mo_sms_lambda = profile.daily_rates.mo_sms.params.get("lambda", 0)
+            sms_rate = effective_rate(
+                base_lambda=mo_sms_lambda,
+                hourly_weights=profile.hourly_weights.sms,
+                dow_multipliers=profile.day_of_week_multipliers.sms,
+                hour=hour,
+                dow=dow,
+                time_step_seconds=step_seconds,
+            )
+            sms_rate *= effects.sms_rate_multiplier
+            n_sms = sample_count(sms_rate, np_rng)
+
+            data_lambda = profile.daily_rates.data_session.params.get("lambda", 0)
+            data_rate = effective_rate(
+                base_lambda=data_lambda,
+                hourly_weights=profile.hourly_weights.data,
+                dow_multipliers=profile.day_of_week_multipliers.data,
+                hour=hour,
+                dow=dow,
+                time_step_seconds=step_seconds,
+            )
+            data_rate *= effects.data_rate_multiplier
+            n_data = sample_count(data_rate, np_rng)
+
+            # Phase 5: Apply concurrency limits
+            n_voice, n_sms, n_data = enforce_concurrency(
+                n_voice, n_sms, n_data, config.events.concurrency
+            )
+
+            # --- Voice MO ---
             msc_ne = tac_to_ne["msc"].get(home_tac)
             if n_voice > 0 and msc_ne is not None:
                 for _ in range(n_voice):
@@ -208,6 +263,20 @@ def run_generation(
                     )
                     callee = _b_party_to_subscriber(b_result)
 
+                    # Phase 5: Select forwarding target from contact book
+                    fwd_target = None
+                    fwd_b_result = select_b_party(
+                        sub,
+                        contact_book,
+                        subscribers,
+                        external_numbers,
+                        contact_book_cfg,
+                        np_rng,
+                    )
+                    fwd_sub = _b_party_to_subscriber(fwd_b_result)
+                    if fwd_sub.imsi != callee.imsi:
+                        fwd_target = fwd_sub
+
                     cdrs = generate_voice_cdr(
                         caller=sub,
                         callee=callee,
@@ -216,6 +285,7 @@ def run_generation(
                         msc=msc_ne,
                         voice_cfg=step_voice_cfg,
                         rng=np_rng,
+                        forward_target=fwd_target,
                     )
                     for cdr in cdrs:
                         # Apply mobility cell IDs
@@ -236,18 +306,6 @@ def run_generation(
                         stats.total_records += 1
 
             # --- SMS MO ---
-            mo_sms_lambda = profile.daily_rates.mo_sms.params.get("lambda", 0)
-            sms_rate = effective_rate(
-                base_lambda=mo_sms_lambda,
-                hourly_weights=profile.hourly_weights.sms,
-                dow_multipliers=profile.day_of_week_multipliers.sms,
-                hour=hour,
-                dow=dow,
-                time_step_seconds=step_seconds,
-            )
-            # Phase 4: Apply special event SMS rate multiplier
-            sms_rate *= effects.sms_rate_multiplier
-            n_sms = sample_count(sms_rate, np_rng)
             smsc_ne = tac_to_ne["smsc"].get(home_tac)
             if n_sms > 0 and smsc_ne is not None:
                 for _ in range(n_sms):
@@ -287,18 +345,6 @@ def run_generation(
                         stats.total_records += 1
 
             # --- Data session ---
-            data_lambda = profile.daily_rates.data_session.params.get("lambda", 0)
-            data_rate = effective_rate(
-                base_lambda=data_lambda,
-                hourly_weights=profile.hourly_weights.data,
-                dow_multipliers=profile.day_of_week_multipliers.data,
-                hour=hour,
-                dow=dow,
-                time_step_seconds=step_seconds,
-            )
-            # Phase 4: Apply special event data rate multiplier
-            data_rate *= effects.data_rate_multiplier
-            n_data = sample_count(data_rate, np_rng)
             sgw_ne = tac_to_ne["sgw"].get(home_tac)
             if n_data > 0 and sgw_ne is not None and pgw_ne is not None:
                 for _ in range(n_data):
