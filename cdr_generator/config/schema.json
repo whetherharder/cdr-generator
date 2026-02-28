@@ -1,0 +1,507 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CDR Generator Configuration",
+  "description": "Schema for cdr_generator_config.yaml (v0.7)",
+  "type": "object",
+  "required": ["meta", "network", "subscribers", "events"],
+  "additionalProperties": false,
+  "properties": {
+
+    "meta": {
+      "type": "object",
+      "required": ["seed", "time_range"],
+      "additionalProperties": false,
+      "properties": {
+        "seed": { "type": "integer" },
+        "time_range": {
+          "type": "object",
+          "required": ["start", "end"],
+          "additionalProperties": false,
+          "properties": {
+            "start": { "type": "string", "format": "date-time" },
+            "end":   { "type": "string", "format": "date-time" }
+          }
+        },
+        "time_step_seconds": { "type": "integer", "minimum": 1, "default": 60 },
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "format":                   { "type": "string", "default": "csv_gzip" },
+            "path":                     { "type": "string", "default": "./output" },
+            "filename_template":        { "type": "string", "default": "CDR_{ne_id}_{date}.csv.gz" },
+            "csv_delimiter":            { "type": "string", "maxLength": 1, "default": "," },
+            "include_metadata_comment": { "type": "boolean", "default": true }
+          }
+        },
+        "parallelism": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "workers": { "type": "integer", "minimum": 1, "default": 16 }
+          }
+        }
+      }
+    },
+
+    "network": {
+      "type": "object",
+      "required": ["operator"],
+      "additionalProperties": false,
+      "properties": {
+        "operator": {
+          "type": "object",
+          "required": ["mcc", "mnc", "name"],
+          "additionalProperties": false,
+          "properties": {
+            "mcc":  { "type": "string" },
+            "mnc":  { "type": "string" },
+            "name": { "type": "string" }
+          }
+        },
+        "elements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "type", "vendor"],
+            "additionalProperties": false,
+            "properties": {
+              "id":      { "type": "string" },
+              "type":    { "type": "string", "enum": ["msc", "sgw", "pgw", "smsc"] },
+              "vendor":  { "type": "string", "enum": ["ericsson", "huawei", "nokia"] },
+              "address": { "type": "string" },
+              "serves_tacs":         { "type": "array", "items": { "type": "integer" } },
+              "serves_apns":         { "type": "array", "items": { "type": "string" } },
+              "extensions_template": { "type": "object" },
+              "produces":            { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
+        "cells": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source":    { "type": "string", "enum": ["inline", "file"] },
+            "file_path": { "type": ["string", "null"] },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["cell_id", "tac", "ecgi", "lat", "lon", "azimuth", "sector", "type", "capacity"],
+                "additionalProperties": false,
+                "properties": {
+                  "cell_id":   { "type": "integer" },
+                  "tac":       { "type": "integer" },
+                  "ecgi":      { "type": "string" },
+                  "lat":       { "type": "number" },
+                  "lon":       { "type": "number" },
+                  "azimuth":   { "type": "integer", "minimum": 0, "exclusiveMaximum": 360 },
+                  "sector":    { "type": "integer", "minimum": 1 },
+                  "type":      { "type": "string", "enum": ["urban", "suburban", "rural"] },
+                  "capacity":  { "type": "string", "enum": ["high", "medium", "low"] },
+                  "neighbors": { "type": "array", "items": { "type": "integer" } }
+                }
+              }
+            }
+          }
+        },
+        "auto_generate": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled":             { "type": "boolean" },
+            "num_cells":           { "type": "integer", "minimum": 1 },
+            "center_lat":          { "type": "number" },
+            "center_lon":          { "type": "number" },
+            "radius_km":           { "type": "number", "exclusiveMinimum": 0 },
+            "urban_ratio":         { "type": "number", "minimum": 0, "maximum": 1 },
+            "suburban_ratio":      { "type": "number", "minimum": 0, "maximum": 1 },
+            "neighbor_radius_km":  { "type": "number", "exclusiveMinimum": 0 },
+            "sectors_per_site":    { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+
+    "subscribers": {
+      "type": "object",
+      "required": ["total_count", "profiles"],
+      "additionalProperties": false,
+      "properties": {
+        "total_count":   { "type": "integer", "minimum": 1 },
+        "imsi_prefix":   { "type": "string" },
+        "msisdn_prefix": { "type": "string" },
+        "profiles": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/subscriber_profile" }
+        },
+        "contact_book": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "avg_contacts":             { "type": "integer", "minimum": 1 },
+            "degree_distribution":      { "$ref": "#/$defs/distribution" },
+            "asymmetric":               { "type": "boolean" },
+            "intra_profile_bias":       { "type": "number" },
+            "repeat_call_probability":  { "type": "number", "minimum": 0, "maximum": 1 },
+            "external_call_ratio":      { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "external_numbers": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "count": { "type": "integer", "minimum": 0 },
+            "prefixes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["prefix", "weight"],
+                "additionalProperties": false,
+                "properties": {
+                  "prefix": { "type": "string" },
+                  "weight": { "type": "number", "minimum": 0 },
+                  "label":  { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "events": {
+      "type": "object",
+      "required": ["voice", "data", "sms"],
+      "additionalProperties": false,
+      "properties": {
+        "voice": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "success_rate":        { "type": "number", "minimum": 0, "maximum": 1 },
+            "failure_causes":      { "type": "array", "items": { "$ref": "#/$defs/cause_weight" } },
+            "duration":            { "$ref": "#/$defs/distribution_with_bounds" },
+            "setup_duration_ms":   { "$ref": "#/$defs/distribution_with_bounds" },
+            "call_forwarding_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+            "normal_termination_causes": { "type": "array", "items": { "$ref": "#/$defs/cause_weight" } },
+            "paired_timestamp_jitter_ms": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "duration":       { "$ref": "#/$defs/distribution_with_bounds" },
+            "volume_uplink":  { "$ref": "#/$defs/distribution_with_bounds" },
+            "volume_downlink": { "$ref": "#/$defs/distribution_with_bounds" },
+            "profile_volume_multipliers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "uplink":   { "type": "number" },
+                  "downlink": { "type": "number" }
+                }
+              }
+            },
+            "apn_weights": {
+              "type": "object",
+              "additionalProperties": { "type": "number", "minimum": 0 }
+            },
+            "qos_distribution": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["qci", "weight"],
+                "additionalProperties": false,
+                "properties": {
+                  "qci":    { "type": "integer" },
+                  "weight": { "type": "number", "minimum": 0 },
+                  "label":  { "type": "string" }
+                }
+              }
+            },
+            "partial_records": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled":                       { "type": "boolean" },
+                "max_record_duration_seconds":   { "type": "integer", "minimum": 1 },
+                "max_record_volume_bytes":       { "type": "integer", "minimum": 1 }
+              }
+            },
+            "termination_causes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["cause", "weight"],
+                "additionalProperties": false,
+                "properties": {
+                  "cause":  { "type": "string" },
+                  "weight": { "type": "number", "minimum": 0 }
+                }
+              }
+            }
+          }
+        },
+        "sms": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "delivery_success_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+            "delivery_delay":        { "$ref": "#/$defs/distribution_with_bounds" },
+            "failure_causes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["cause", "weight"],
+                "additionalProperties": false,
+                "properties": {
+                  "cause":  { "type": "string" },
+                  "weight": { "type": "number", "minimum": 0 }
+                }
+              }
+            }
+          }
+        },
+        "concurrency": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_voice": { "type": ["integer", "null"], "minimum": 1 },
+            "max_data":  { "type": ["integer", "null"], "minimum": 1 },
+            "max_sms":   { "type": ["integer", "null"], "minimum": 1 }
+          }
+        }
+      }
+    },
+
+    "anomalies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "duplicate_records": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled":            { "type": "boolean" },
+            "rate":               { "type": "number", "minimum": 0, "maximum": 1 },
+            "max_time_shift_ms":  { "type": "integer", "minimum": 0 }
+          }
+        },
+        "missing_fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled":        { "type": "boolean" },
+            "rate":           { "type": "number", "minimum": 0, "maximum": 1 },
+            "target_fields":  { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "orphaned_records": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "rate":    { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "timestamp_anomalies": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "rate":    { "type": "number", "minimum": 0, "maximum": 1 },
+            "types":   { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "corrupt_values": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "rate":    { "type": "number", "minimum": 0, "maximum": 1 },
+            "types":   { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+
+    "special_events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "effect"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "time_range": {
+            "type": "object",
+            "required": ["start", "end"],
+            "additionalProperties": false,
+            "properties": {
+              "start": { "type": "string", "format": "date-time" },
+              "end":   { "type": "string", "format": "date-time" }
+            }
+          },
+          "recurrence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "days":  { "type": "array", "items": { "type": "string" } },
+              "hours": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 23 } }
+            }
+          },
+          "effect": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sms_rate_multiplier":           { "type": "number", "minimum": 0 },
+              "voice_rate_multiplier":         { "type": "number", "minimum": 0 },
+              "data_rate_multiplier":          { "type": "number", "minimum": 0 },
+              "voice_failure_rate_override":   { "type": "number", "minimum": 0, "maximum": 1 },
+              "congestion_cells":              { "type": "array", "items": { "type": "integer" } },
+              "disabled_cells":                { "type": "array", "items": { "type": "integer" } },
+              "overflow_cells":                { "type": "array", "items": { "type": "integer" } }
+            }
+          }
+        }
+      }
+    },
+
+    "vendor_extensions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["key", "value"],
+              "properties": {
+                "key":   { "type": "string" },
+                "value": {}
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "interactive_overrides": {
+      "type": ["object", "null"],
+      "additionalProperties": {}
+    }
+  },
+
+  "$defs": {
+    "distribution": {
+      "type": "object",
+      "required": ["type", "params"],
+      "additionalProperties": false,
+      "properties": {
+        "type":   { "type": "string" },
+        "params": { "type": "object" }
+      }
+    },
+
+    "distribution_with_bounds": {
+      "type": "object",
+      "required": ["distribution"],
+      "additionalProperties": false,
+      "properties": {
+        "distribution": { "$ref": "#/$defs/distribution" },
+        "min_seconds":  { "type": "number" },
+        "max_seconds":  { "type": "number" },
+        "min_bytes":    { "type": "integer" }
+      }
+    },
+
+    "cause_weight": {
+      "type": "object",
+      "required": ["cause", "weight"],
+      "additionalProperties": false,
+      "properties": {
+        "cause":  { "type": "string" },
+        "code":   { "type": "integer" },
+        "weight": { "type": "number", "minimum": 0 }
+      }
+    },
+
+    "hourly_weights_array": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 24,
+      "maxItems": 24
+    },
+
+    "dow_multipliers_array": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 7,
+      "maxItems": 7
+    },
+
+    "subscriber_profile": {
+      "type": "object",
+      "required": ["name", "weight", "daily_rates", "hourly_weights", "day_of_week_multipliers", "mobility"],
+      "additionalProperties": false,
+      "properties": {
+        "name":        { "type": "string" },
+        "weight":      { "type": "number", "minimum": 0, "maximum": 1 },
+        "description": { "type": "string" },
+        "imei_tac_pool":   { "type": "array", "items": { "type": "string" } },
+        "rat_preference":  { "type": "array", "items": { "type": "string" } },
+        "daily_rates": {
+          "type": "object",
+          "required": ["mo_call", "mo_sms", "data_session", "mt_call", "mt_sms"],
+          "additionalProperties": false,
+          "properties": {
+            "mo_call":      { "$ref": "#/$defs/distribution" },
+            "mo_sms":       { "$ref": "#/$defs/distribution" },
+            "data_session": { "$ref": "#/$defs/distribution" },
+            "mt_call":      { "$ref": "#/$defs/distribution" },
+            "mt_sms":       { "$ref": "#/$defs/distribution" }
+          }
+        },
+        "hourly_weights": {
+          "type": "object",
+          "required": ["voice", "data", "sms"],
+          "additionalProperties": false,
+          "properties": {
+            "voice": { "$ref": "#/$defs/hourly_weights_array" },
+            "data":  { "$ref": "#/$defs/hourly_weights_array" },
+            "sms":   { "$ref": "#/$defs/hourly_weights_array" }
+          }
+        },
+        "day_of_week_multipliers": {
+          "type": "object",
+          "required": ["voice", "data", "sms"],
+          "additionalProperties": false,
+          "properties": {
+            "voice": { "$ref": "#/$defs/dow_multipliers_array" },
+            "data":  { "$ref": "#/$defs/dow_multipliers_array" },
+            "sms":   { "$ref": "#/$defs/dow_multipliers_array" }
+          }
+        },
+        "mobility": {
+          "type": "object",
+          "required": ["home_cell_strategy"],
+          "additionalProperties": false,
+          "properties": {
+            "home_cell_strategy":    { "type": "string" },
+            "work_cell_strategy":    { "type": ["string", "null"] },
+            "commute_hours":         { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 23 } },
+            "roaming_probability":   { "type": "number", "minimum": 0, "maximum": 1 },
+            "handover_during_call":  { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
+      }
+    }
+  }
+}
