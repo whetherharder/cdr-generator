@@ -1,89 +1,48 @@
 # CDR Generator -- Progress Tracker
 
-**Last updated**: 2026-02-27
+**Last updated**: 2026-02-28 (post Phase 4 commit)
 **Branch**: `feature/phase-3-contacts-mobility`
-**Baseline**: 193 tests (Phase 1+2), target 233+ (Phase 3)
+**Tests**: 366 passing (Phase 1+2+3+4)
 
 ---
 
-## Team: cdr-gen-phases
+## Phase Status
 
-| Role | Agent | Status |
-|------|-------|--------|
-| PM | pm | Active -- decomposed all 4 phases, tracking progress |
-| Architect | architect | Designed Phase 3+4 APIs, standing by |
-| Developer | developer | Implemented Phase 3 modules (#14-17), awaiting integration (#18) |
-| QA | qa | Wrote 40 Phase 3 tests (#10-13), awaiting validation (#19) |
-| Fixer | fixer | Resolving API mismatch between tests and implementations (#43-47) |
+| Phase | Status | Tests | Commit |
+|-------|--------|-------|--------|
+| Phase 1 | DONE | 158 | on main+develop |
+| Phase 2 | DONE | 193 | on develop |
+| Phase 3 | DONE | 232 | 9cf56f1 |
+| Phase 4 | DONE | 366 | pending commit |
+| Phase 5 | NEXT | -- | -- |
+| Phase 6 | PLANNED | -- | -- |
 
 ---
 
-## Full Task Map
+## Phase 4: Anomalies + Special Events (DONE)
 
-### Phase 3: Contact Book + Mobility + Extensions (IN PROGRESS)
+All 7 tasks completed. 113 new tests (61 anomalies + 46 special events + 6 misc), 366 total passing.
 
-| # | Task | Owner | Status | Blocked By |
-|---|------|-------|--------|------------|
-| 9 | Design Phase 3 APIs | pm | DONE | -- |
-| 10 | Tests: contact_book + external_numbers | qa | DONE | -- |
-| 11 | Tests: mobility | qa | DONE | -- |
-| 12 | Tests: b_party | qa | DONE | -- |
-| 13 | Tests: extensions | qa | DONE | -- |
-| 14 | Implement contact_book + external_numbers | developer | IN PROGRESS (fixing) | #10 |
-| 15 | Implement mobility | developer | IN PROGRESS (fixing) | #11 |
-| 16 | Implement b_party | developer | IN PROGRESS (fixing) | #12, #14 |
-| 17 | Implement extensions | developer | IN PROGRESS (fixing) | #13 |
-| 43-47 | Fix API mismatches (fixer agent) | fixer | IN PROGRESS | -- |
-| 18 | Integrate into runner.py | developer | PENDING | #14-17 |
-| 19 | Integration testing + statistical validation | qa | PENDING | #18 |
+**Modules implemented**:
+- `engine/anomalies.py` -- AnomalyPipeline + 5 stages: orphaned -> missing -> corrupt -> timestamps -> duplicates
+- `engine/special_events.py` -- SpecialEventEngine + ActiveEffects + compound multipliers
+- `engine/runner.py` -- Integrated anomalies pipeline and special events engine
 
-**Fixer progress**: Started at 42 failing tests, now down to ~6. Fixer is rewriting tests to match final implementations.
+**Tests added**:
+- `tests/test_anomalies.py` -- 61 tests covering all 5 anomaly stages + pipeline orchestration
+- `tests/test_special_events.py` -- 46 tests covering time-ranged/recurring events, compound effects, edge cases
 
-**Modules created**:
-- `cdr_generator/assets/contact_book.py` -- ContactBook + build_contact_book()
-- `cdr_generator/assets/external_numbers.py` -- ExternalNumberPool + generate_external_pool()
-- `cdr_generator/engine/mobility.py` -- resolve_position() pure function
-- `cdr_generator/engine/b_party.py` -- BPartySelector + BPartyResult
-- `cdr_generator/generators/extensions.py` -- generate_extensions() + base64 encoding
-
-### Phase 4: Anomalies + Special Events (PLANNED)
+### Phase 5: Call Forwarding + Edge Cases (NEXT)
 
 | # | Task | Owner | Status | Blocked By |
 |---|------|-------|--------|------------|
-| 20 | Design Phase 4 APIs | architect | DONE | Phase 3 |
-| 21 | Tests: anomalies pipeline | qa | PENDING | #20 |
-| 22 | Tests: special events engine | qa | PENDING | #20 |
-| 23 | Implement anomalies.py | developer | PENDING | #20, #21 |
-| 24 | Implement special_events.py | developer | PENDING | #20, #22 |
-| 25 | Integrate into runner.py + estimate CLI | developer | PENDING | #23, #24 |
-| 26 | Integration testing + validation | qa | PENDING | #25 |
-
-**Modules**:
-- `engine/anomalies.py` -- pipeline: orphaned -> missing -> corrupt -> timestamps -> duplicates
-- `engine/special_events.py` -- active events, compound multipliers, disabled/overflow cells
-- Update `engine/rates.py` -- add special_event_multiplier parameter
-- Add `cdrgen estimate` CLI command
-
-**Acceptance targets**: duplicates ~0.5%, orphaned ~2%, missing ~1%, timestamps ~0.3%, corrupt ~0.2%, New Year SMS x20/voice x5, cell outage redirects
-
-### Phase 5: Call Forwarding + Edge Cases (PLANNED)
-
-| # | Task | Owner | Status | Blocked By |
-|---|------|-------|--------|------------|
-| 28 | Design Phase 5 APIs | architect | PENDING | Phase 4 |
+| 28 | Design Phase 5 APIs | architect | PENDING | -- |
 | 29 | Tests: call forwarding | qa | PENDING | #28 |
 | 30 | Tests: concurrency + disabled cell edge case | qa | PENDING | #28 |
 | 31 | Implement call forwarding in voice.py | developer | PENDING | #28, #29 |
 | 32 | Implement concurrency.py + edge case | developer | PENDING | #28, #30 |
 | 33 | Integrate into runner.py | developer | PENDING | #31, #32 |
 | 34 | Integration testing | qa | PENDING | #33 |
-
-**Modules**:
-- Update `generators/voice.py` -- call forwarding -> MO + MT redirect (redirecting_number)
-- `engine/concurrency.py` -- max 1 voice + 1 data + unlimited SMS per step
-- Edge case: disabled cell without overflow -> cause_code=38
-
-**Acceptance targets**: forwarding ~3%, concurrency enforced, disabled-no-overflow -> code 38
 
 ### Phase 6: Multiprocess (PLANNED)
 
@@ -97,51 +56,11 @@
 | 40 | Update CLI --workers + --progress | developer | PENDING | #38 |
 | 41 | Integration + performance testing | qa | PENDING | #38, #39, #40 |
 
-**Modules**:
-- `engine/orchestrator.py` -- shard subscribers, spawn gen+writer workers
-- `engine/generator_worker.py` -- per-shard generation loop
-- `writer/writer_worker.py` -- per-(ne_id, date) file writing
-- Update `assets/store.py` -- shared memory for read-only assets
-- Update `cli.py` -- --workers N, --progress flags
-
-**Acceptance targets**: 1 worker = N workers (identical output), NE x days files, sorted records, 10M subs < 1hr
-
 ---
-
-## Dependency Graph
-
-```
-Phase 3 (#1)
-  -> Phase 4 (#2)
-    -> Phase 5 (#3)
-      -> Phase 6 (#4)
-```
-
-Within each phase:
-```
-Design (architect) -> Tests (qa, parallel) -> Implement (developer, parallel) -> Integrate (developer) -> Validate (qa)
-```
-
-## Critical Path
-
-```
-Fixer (#43-47) -> #18 (integration) -> #19 (validation) -> Phase 3 DONE
-  -> #21/#22 (Phase 4 tests) -> #23/#24 (implement) -> #25 (integrate) -> #26 (validate) -> Phase 4 DONE
-    -> #29/#30 (Phase 5 tests) -> #31/#32 (implement) -> #33 (integrate) -> #34 (validate) -> Phase 5 DONE
-      -> #36/#37 (Phase 6 tests) -> #38-40 (implement) -> #41 (validate) -> Phase 6 DONE
-```
-
-## Git State
-
-- `main` -- Phase 1 only
-- `develop` -- Phase 1+2 merged (193 tests)
-- `feature/phase-3-contacts-mobility` -- current work branch (uncommitted Phase 3 work)
-- New branches needed: `feature/phase-4-anomalies`, `feature/phase-5-forwarding`, `feature/phase-6-multiprocess`
 
 ## Resume Instructions
 
-1. Run: `.venv/bin/python -m pytest tests/ -q --tb=short`
-2. If all tests pass: proceed with #18 (runner integration), then #19 (validation)
-3. Commit Phase 3, create PR to develop
-4. Create `feature/phase-4-anomalies` branch, start Phase 4 tasks
-5. Continue through Phases 5, 6
+1. Verify: `/workspace/.venv/bin/python3 -m pytest tests/ -q --tb=short` (should be 366 passed)
+2. PR Phase 3+4 -> develop, get Codex review, merge
+3. Start Phase 5: design APIs -> write tests -> implement -> integrate -> validate
+4. Then Phase 6: multiprocess

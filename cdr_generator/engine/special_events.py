@@ -28,7 +28,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from cdr_generator.assets.models import Cell
     from cdr_generator.config.models import SpecialEventConfig
 
 
@@ -91,7 +90,7 @@ class ActiveEffects:
         bool
             True if the cell is in the disabled set.
         """
-        ...
+        return cell_id in self.disabled_cells
 
     def has_overflow(self) -> bool:
         """Check whether overflow cells are available.
@@ -101,7 +100,7 @@ class ActiveEffects:
         bool
             True if at least one overflow cell is configured.
         """
-        ...
+        return len(self.overflow_cells) > 0
 
     def pick_overflow_cell(self, rng: np.random.Generator) -> int | None:
         """Select a random overflow cell.
@@ -116,12 +115,16 @@ class ActiveEffects:
         int | None
             An overflow cell ID, or ``None`` if no overflow cells exist.
         """
-        ...
+        if not self.overflow_cells:
+            return None
+        cells = sorted(self.overflow_cells)
+        idx = int(rng.integers(0, len(cells)))
+        return cells[idx]
 
     @property
     def is_active(self) -> bool:
         """True if any special event is currently active."""
-        ...
+        return len(self.active_event_names) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -130,13 +133,20 @@ class ActiveEffects:
 
 # Day name to weekday index mapping (Monday=0 ... Sunday=6)
 _DAY_NAME_TO_INDEX: dict[str, int] = {
-    "mon": 0, "monday": 0,
-    "tue": 1, "tuesday": 1,
-    "wed": 2, "wednesday": 2,
-    "thu": 3, "thursday": 3,
-    "fri": 4, "friday": 4,
-    "sat": 5, "saturday": 5,
-    "sun": 6, "sunday": 6,
+    "mon": 0,
+    "monday": 0,
+    "tue": 1,
+    "tuesday": 1,
+    "wed": 2,
+    "wednesday": 2,
+    "thu": 3,
+    "thursday": 3,
+    "fri": 4,
+    "friday": 4,
+    "sat": 5,
+    "saturday": 5,
+    "sun": 6,
+    "sunday": 6,
 }
 
 
@@ -153,7 +163,7 @@ class SpecialEventEngine:
     """
 
     def __init__(self, events: list[SpecialEventConfig]) -> None:
-        ...
+        self._events = events
 
     def get_active_effects(self, timestamp: datetime) -> ActiveEffects:
         """Compute the compound effects of all events active at *timestamp*.
@@ -180,7 +190,63 @@ class SpecialEventEngine:
             returns a default ``ActiveEffects`` (all multipliers = 1.0,
             no overrides, empty cell sets).
         """
-        ...
+        active_events = [e for e in self._events if self._is_event_active(e, timestamp)]
+
+        if not active_events:
+            return ActiveEffects()
+
+        voice_mult = 1.0
+        sms_mult = 1.0
+        data_mult = 1.0
+        failure_override: float | None = None
+        disabled: set[int] = set()
+        overflow: set[int] = set()
+        congestion: set[int] = set()
+        names: list[str] = []
+
+        for event in active_events:
+            eff = event.effect
+            # Multiply rate multipliers (None means no change = 1.0)
+            voice_mult *= (
+                eff.voice_rate_multiplier
+                if eff.voice_rate_multiplier is not None
+                else 1.0
+            )
+            sms_mult *= (
+                eff.sms_rate_multiplier if eff.sms_rate_multiplier is not None else 1.0
+            )
+            data_mult *= (
+                eff.data_rate_multiplier
+                if eff.data_rate_multiplier is not None
+                else 1.0
+            )
+
+            # voice_failure_rate_override: take maximum of non-None values
+            if eff.voice_failure_rate_override is not None:
+                if failure_override is None:
+                    failure_override = eff.voice_failure_rate_override
+                else:
+                    failure_override = max(
+                        failure_override, eff.voice_failure_rate_override
+                    )
+
+            # Cell sets: union
+            disabled.update(eff.disabled_cells)
+            overflow.update(eff.overflow_cells)
+            congestion.update(eff.congestion_cells)
+
+            names.append(event.name)
+
+        return ActiveEffects(
+            voice_rate_multiplier=voice_mult,
+            sms_rate_multiplier=sms_mult,
+            data_rate_multiplier=data_mult,
+            voice_failure_rate_override=failure_override,
+            disabled_cells=frozenset(disabled),
+            overflow_cells=frozenset(overflow),
+            congestion_cells=frozenset(congestion),
+            active_event_names=tuple(names),
+        )
 
     def _is_event_active(
         self,
@@ -201,7 +267,17 @@ class SpecialEventEngine:
         bool
             True if the event is active.
         """
-        ...
+        if event.time_range is not None:
+            if event.time_range.start <= timestamp < event.time_range.end:
+                return True
+
+        if event.recurrence is not None:
+            if self._is_recurrence_active(
+                event.recurrence.days, event.recurrence.hours, timestamp
+            ):
+                return True
+
+        return False
 
     def _is_recurrence_active(
         self,
@@ -225,7 +301,18 @@ class SpecialEventEngine:
         bool
             True if the day and hour both match.
         """
-        ...
+        # Convert day names to weekday indices
+        day_indices = {
+            _DAY_NAME_TO_INDEX[d.lower()]
+            for d in days
+            if d.lower() in _DAY_NAME_TO_INDEX
+        }
+
+        if timestamp.weekday() not in day_indices:
+            return False
+        if timestamp.hour not in hours:
+            return False
+        return True
 
 
 # ---------------------------------------------------------------------------

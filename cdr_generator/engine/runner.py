@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -17,12 +17,14 @@ import numpy as np
 from cdr_generator.assets.contact_book import build_contact_book
 from cdr_generator.assets.external_numbers import generate_external_numbers
 from cdr_generator.assets.generator import generate_all_assets
-from cdr_generator.assets.models import Cell, NetworkElement, Subscriber
-from cdr_generator.config.models import CDRGeneratorConfig, SubscriberProfile
+from cdr_generator.assets.models import NetworkElement, Subscriber
+from cdr_generator.config.models import CDRGeneratorConfig
+from cdr_generator.engine.anomalies import AnomalyPipeline, AnomalyStats
 from cdr_generator.engine.b_party import BPartyResult, select_b_party
 from cdr_generator.engine.mobility import resolve_position
 from cdr_generator.engine.poisson import sample_count
 from cdr_generator.engine.rates import effective_rate
+from cdr_generator.engine.special_events import SpecialEventEngine
 from cdr_generator.generators.extensions import generate_extensions
 from cdr_generator.models.cdr import CDRRecord
 from cdr_generator.writer.csv_writer import CsvWriter, create_empty_output
@@ -37,6 +39,7 @@ class GenerationStats:
     sms_records: int = 0
     data_records: int = 0
     files_written: int = 0
+    anomaly_stats: AnomalyStats | None = None
 
 
 def run_generation(
@@ -97,6 +100,10 @@ def run_generation(
     # Prepare numpy RNG for Poisson sampling and generators
     np_rng = np.random.default_rng(config.meta.seed)
 
+    # Phase 4: Initialize special events engine and anomaly pipeline
+    special_event_engine = SpecialEventEngine(config.special_events)
+    anomaly_pipeline = AnomalyPipeline(config.anomalies, np_rng)
+
     # Phase 3: Build contact book and external number pool
     contact_book_cfg = config.subscribers.contact_book.model_dump()
     contact_book = build_contact_book(subscribers, contact_book_cfg, np_rng)
@@ -130,6 +137,15 @@ def run_generation(
         hour = current.hour
         dow = current.weekday()
 
+        # Phase 4: Get active special event effects for this time step
+        effects = special_event_engine.get_active_effects(current)
+
+        # Prepare voice config with failure rate override if active
+        step_voice_cfg = voice_cfg
+        if effects.voice_failure_rate_override is not None:
+            step_voice_cfg = dict(voice_cfg)
+            step_voice_cfg["success_rate"] = 1.0 - effects.voice_failure_rate_override
+
         for sub in subscribers:
             profile = profiles_by_name.get(sub.profile_name)
             if profile is None:
@@ -149,6 +165,21 @@ def run_generation(
                 rng=np_rng,
             )
             cell = cells_by_id.get(first_cell_id, home_cell)
+
+            # Phase 4: Handle disabled cells — relocate to overflow or skip
+            if effects.is_cell_disabled(first_cell_id):
+                overflow_cell_id = effects.pick_overflow_cell(np_rng)
+                if overflow_cell_id is not None:
+                    overflow_cell = cells_by_id.get(overflow_cell_id)
+                    if overflow_cell is not None:
+                        first_cell_id = overflow_cell_id
+                        last_cell_id = overflow_cell_id
+                        cell = overflow_cell
+                    else:
+                        continue  # overflow cell not found, skip subscriber
+                else:
+                    continue  # no overflow available, skip subscriber
+
             home_tac = cell.tac
 
             # --- Voice MO ---
@@ -161,13 +192,19 @@ def run_generation(
                 dow=dow,
                 time_step_seconds=step_seconds,
             )
+            # Phase 4: Apply special event voice rate multiplier
+            voice_rate *= effects.voice_rate_multiplier
             n_voice = sample_count(voice_rate, np_rng)
             msc_ne = tac_to_ne["msc"].get(home_tac)
             if n_voice > 0 and msc_ne is not None:
                 for _ in range(n_voice):
                     b_result = select_b_party(
-                        sub, contact_book, subscribers, external_numbers,
-                        contact_book_cfg, np_rng,
+                        sub,
+                        contact_book,
+                        subscribers,
+                        external_numbers,
+                        contact_book_cfg,
+                        np_rng,
                     )
                     callee = _b_party_to_subscriber(b_result)
 
@@ -177,7 +214,7 @@ def run_generation(
                         event_time=current,
                         cell=cell,
                         msc=msc_ne,
-                        voice_cfg=voice_cfg,
+                        voice_cfg=step_voice_cfg,
                         rng=np_rng,
                     )
                     for cdr in cdrs:
@@ -187,7 +224,10 @@ def run_generation(
                             cdr.last_cell_id = last_cell_id
                         # Apply vendor extensions
                         _apply_vendor_extensions(
-                            cdr, msc_ne, vendor_ext_cfg, np_rng,
+                            cdr,
+                            msc_ne,
+                            vendor_ext_cfg,
+                            np_rng,
                         )
                         ne_id = cdr.serving_ne_id
                         cdr_date = cdr.event_timestamp.date()
@@ -205,13 +245,19 @@ def run_generation(
                 dow=dow,
                 time_step_seconds=step_seconds,
             )
+            # Phase 4: Apply special event SMS rate multiplier
+            sms_rate *= effects.sms_rate_multiplier
             n_sms = sample_count(sms_rate, np_rng)
             smsc_ne = tac_to_ne["smsc"].get(home_tac)
             if n_sms > 0 and smsc_ne is not None:
                 for _ in range(n_sms):
                     b_result = select_b_party(
-                        sub, contact_book, subscribers, external_numbers,
-                        contact_book_cfg, np_rng,
+                        sub,
+                        contact_book,
+                        subscribers,
+                        external_numbers,
+                        contact_book_cfg,
+                        np_rng,
                     )
                     recipient = _b_party_to_subscriber(b_result)
 
@@ -229,7 +275,10 @@ def run_generation(
                             cdr.first_cell_id = first_cell_id
                             cdr.last_cell_id = last_cell_id
                         _apply_vendor_extensions(
-                            cdr, smsc_ne, vendor_ext_cfg, np_rng,
+                            cdr,
+                            smsc_ne,
+                            vendor_ext_cfg,
+                            np_rng,
                         )
                         ne_id = cdr.serving_ne_id
                         cdr_date = cdr.event_timestamp.date()
@@ -247,6 +296,8 @@ def run_generation(
                 dow=dow,
                 time_step_seconds=step_seconds,
             )
+            # Phase 4: Apply special event data rate multiplier
+            data_rate *= effects.data_rate_multiplier
             n_data = sample_count(data_rate, np_rng)
             sgw_ne = tac_to_ne["sgw"].get(home_tac)
             if n_data > 0 and sgw_ne is not None and pgw_ne is not None:
@@ -266,7 +317,10 @@ def run_generation(
                         serving_ne = nes_by_id.get(cdr.serving_ne_id)
                         if serving_ne is not None:
                             _apply_vendor_extensions(
-                                cdr, serving_ne, vendor_ext_cfg, np_rng,
+                                cdr,
+                                serving_ne,
+                                vendor_ext_cfg,
+                                np_rng,
                             )
                         ne_id = cdr.serving_ne_id
                         cdr_date = cdr.event_timestamp.date()
@@ -276,14 +330,40 @@ def run_generation(
 
         current += timedelta(seconds=step_seconds)
 
+    # Phase 4: Apply anomaly pipeline to all records before writing
+    combined_anomaly_stats = AnomalyStats()
+
     # Write output files: sort records and write per (NE, date)
     writer = CsvWriter(output_dir=output_dir)
 
     for (ne_id, file_date), records in sorted(records_by_ne_date.items()):
+        # Apply anomaly pipeline per (ne_id, date) batch
+        records, anomaly_batch_stats = anomaly_pipeline.apply(records)
+
+        # Accumulate anomaly stats
+        combined_anomaly_stats.orphaned_count += anomaly_batch_stats.orphaned_count
+        combined_anomaly_stats.missing_fields_count += (
+            anomaly_batch_stats.missing_fields_count
+        )
+        combined_anomaly_stats.corrupt_values_count += (
+            anomaly_batch_stats.corrupt_values_count
+        )
+        combined_anomaly_stats.timestamp_anomalies_count += (
+            anomaly_batch_stats.timestamp_anomalies_count
+        )
+        combined_anomaly_stats.duplicate_count += anomaly_batch_stats.duplicate_count
+
+        # Update total_records to reflect anomaly changes
+        stats.total_records += (
+            anomaly_batch_stats.duplicate_count - anomaly_batch_stats.orphaned_count
+        )
+
         # Sort by event_timestamp
         records.sort(key=lambda r: r.event_timestamp)
         writer.write_file(ne_id=ne_id, file_date=file_date, records=records)
         stats.files_written += 1
+
+    stats.anomaly_stats = combined_anomaly_stats
 
     # Also create empty files for NEs/dates with no records
     start_date = start_dt.date()
