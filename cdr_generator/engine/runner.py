@@ -117,6 +117,10 @@ def run_generation(
     end_dt = config.meta.time_range.end.replace(tzinfo=timezone.utc)
     step_seconds = config.meta.time_step_seconds
 
+    # Date range for output file bucketing — clamp any spillover records
+    _start_date = start_dt.date()
+    _end_date = end_dt.date()
+
     # Voice/SMS/Data config as dicts for generators
     voice_cfg = config.events.voice.model_dump()
     sms_cfg = config.events.sms.model_dump()
@@ -199,7 +203,7 @@ def run_generation(
                             rat_type="eutran",
                         )
                         ne_id = failed_cdr.serving_ne_id
-                        cdr_date = failed_cdr.event_timestamp.date()
+                        cdr_date = min(failed_cdr.event_timestamp.date(), _end_date)
                         records_by_ne_date[(ne_id, cdr_date)].append(failed_cdr)
                         stats.voice_records += 1
                         stats.total_records += 1
@@ -300,7 +304,7 @@ def run_generation(
                             np_rng,
                         )
                         ne_id = cdr.serving_ne_id
-                        cdr_date = cdr.event_timestamp.date()
+                        cdr_date = min(cdr.event_timestamp.date(), _end_date)
                         records_by_ne_date[(ne_id, cdr_date)].append(cdr)
                         stats.voice_records += 1
                         stats.total_records += 1
@@ -339,7 +343,7 @@ def run_generation(
                             np_rng,
                         )
                         ne_id = cdr.serving_ne_id
-                        cdr_date = cdr.event_timestamp.date()
+                        cdr_date = min(cdr.event_timestamp.date(), _end_date)
                         records_by_ne_date[(ne_id, cdr_date)].append(cdr)
                         stats.sms_records += 1
                         stats.total_records += 1
@@ -369,7 +373,7 @@ def run_generation(
                                 np_rng,
                             )
                         ne_id = cdr.serving_ne_id
-                        cdr_date = cdr.event_timestamp.date()
+                        cdr_date = min(cdr.event_timestamp.date(), _end_date)
                         records_by_ne_date[(ne_id, cdr_date)].append(cdr)
                         stats.data_records += 1
                         stats.total_records += 1
@@ -412,10 +416,8 @@ def run_generation(
     stats.anomaly_stats = combined_anomaly_stats
 
     # Also create empty files for NEs/dates with no records
-    start_date = start_dt.date()
-    end_date = end_dt.date()
-    current_date = start_date
-    while current_date <= end_date:
+    current_date = _start_date
+    while current_date <= _end_date:
         for ne in network_elements:
             key = (ne.id, current_date)
             if key not in records_by_ne_date:

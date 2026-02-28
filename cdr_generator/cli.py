@@ -19,8 +19,8 @@ from cdr_generator.config.loader import (
     parse_override_strings,
     validate_config as _validate_config_fn,
 )
+from cdr_generator.engine.orchestrator import orchestrate
 from cdr_generator.engine.runner import run_generation
-from cdr_generator.writer.csv_writer import create_empty_output
 
 
 @click.group()
@@ -172,7 +172,10 @@ def generate(
         cells, nes, subs = generate_all_assets(config)
         save_assets(assets_path, cells, nes, subs, config_hash)
 
-    stats = run_generation(config, dry_run=dry_run)
+    if workers > 1:
+        stats = orchestrate(config, workers=workers, dry_run=dry_run)
+    else:
+        stats = run_generation(config, dry_run=dry_run)
 
     if dry_run:
         click.echo(
@@ -186,6 +189,8 @@ def generate(
     click.echo(
         f"  Voice: {stats.voice_records}, SMS: {stats.sms_records}, Data: {stats.data_records}"
     )
+    if workers > 1:
+        click.echo(f"  Workers: {workers}")
 
 
 @main.command()
