@@ -139,10 +139,16 @@ def run_generation(
     # Accumulate CDRs per (ne_id, date) for sorting before write
     records_by_ne_date: dict[tuple[str, date], list[CDRRecord]] = defaultdict(list)
 
-    # Import generators
-    from cdr_generator.generators.data import generate_data_cdr
+    # Import generators and config cache builders
+    from cdr_generator.generators.data import (
+        build_data_cfg_cache,
+        generate_data_cdr,
+    )
     from cdr_generator.generators.sms import generate_sms_cdr
-    from cdr_generator.generators.voice import generate_voice_cdr
+    from cdr_generator.generators.voice import (
+        build_voice_cfg_cache,
+        generate_voice_cdr,
+    )
 
     # Vendor extension config lookup
     vendor_ext_cfg = config.vendor_extensions
@@ -239,6 +245,34 @@ def run_generation(
     # PERFORMANCE: Step duration factor (seconds → per-hour fraction)
     _step_factor = step_seconds / 3600.0
 
+    # PERFORMANCE: Pre-compute generator config caches (eliminates all
+    # dict.get calls inside the hot path for data/voice generators).
+    voice_cfg_cache = build_voice_cfg_cache(voice_cfg)
+    data_cfg_cache_by_profile: dict[str, Any] = {
+        pname: build_data_cfg_cache(cfg)
+        for pname, cfg in data_cfg_by_profile.items()
+    }
+
+    # PERFORMANCE: Pre-build contact list per subscriber (indexed by
+    # sub_profile_pairs index).  Avoids contact_book.get() on every
+    # b_party selection call.
+    sub_contacts: list[list[str]] = [
+        contact_book.get(sub.imsi, []) for sub, _ in sub_profile_pairs
+    ]
+
+    # PERFORMANCE: Pre-extract b_party config constants (avoids 2
+    # config.get() calls per b_party selection call).
+    _b_ext_ratio: float = float(
+        contact_book_cfg.get("external_call_ratio", 0.15)
+    )
+    _b_repeat_prob: float = float(
+        contact_book_cfg.get("repeat_call_probability", 0.6)
+    )
+    _b_contact_threshold: float = (
+        _b_ext_ratio + (1.0 - _b_ext_ratio) * _b_repeat_prob
+    )
+    _n_ext = len(external_numbers)
+
     # ------------------------------------------------------------------
     # PERFORMANCE: Vectorized rate matrix builder (closure over locals)
     # ------------------------------------------------------------------
@@ -306,6 +340,10 @@ def run_generation(
         if effects.voice_failure_rate_override is not None:
             step_voice_cfg = dict(voice_cfg)
             step_voice_cfg["success_rate"] = 1.0 - effects.voice_failure_rate_override
+
+        # Use pre-computed voice cache only when no special-event override
+        # (override changes success_rate which is pre-baked into the cache)
+        _step_vcfg = voice_cfg_cache if step_voice_cfg is voice_cfg else None
 
         # Cache special event multipliers for this hour
         voice_mult = effects.voice_rate_multiplier
@@ -636,7 +674,10 @@ def run_generation(
 
                 # --- Voice MO ---
                 msc_ne = msc_by_tac.get(home_tac)
+                _sub_contacts = sub_contacts[sub_idx]
+
                 if n_voice > 0 and msc_ne is not None:
+                    # Use pre-built contact list and pre-extracted ratio constants
                     for _ in range(n_voice):
                         b_result = select_b_party(
                             sub,
@@ -646,6 +687,9 @@ def run_generation(
                             contact_book_cfg,
                             np_rng,
                             sub_by_imsi,
+                            a_party_contacts=_sub_contacts,
+                            ext_ratio=_b_ext_ratio,
+                            contact_threshold=_b_contact_threshold,
                         )
                         callee = _b_party_to_subscriber(b_result)
 
@@ -657,6 +701,9 @@ def run_generation(
                             contact_book_cfg,
                             np_rng,
                             sub_by_imsi,
+                            a_party_contacts=_sub_contacts,
+                            ext_ratio=_b_ext_ratio,
+                            contact_threshold=_b_contact_threshold,
                         )
                         fwd_sub = _b_party_to_subscriber(fwd_b_result)
                         fwd_target = (
@@ -673,6 +720,7 @@ def run_generation(
                             rng=np_rng,
                             forward_target=fwd_target,
                             _buf=rng_buf,
+                            _vcfg=_step_vcfg,
                         )
                         for cdr in cdrs:
                             if cdr.served_imsi == sub.imsi:
@@ -699,6 +747,9 @@ def run_generation(
                             contact_book_cfg,
                             np_rng,
                             sub_by_imsi,
+                            a_party_contacts=_sub_contacts,
+                            ext_ratio=_b_ext_ratio,
+                            contact_threshold=_b_contact_threshold,
                         )
                         recipient = _b_party_to_subscriber(b_result)
 
@@ -729,6 +780,7 @@ def run_generation(
                 sgw_ne = sgw_by_tac.get(home_tac)
                 if n_data > 0 and sgw_ne is not None and pgw_ne is not None:
                     step_data_cfg = data_cfg_by_profile[sub.profile_name]
+                    step_data_cfg_cache = data_cfg_cache_by_profile[sub.profile_name]
                     for _ in range(n_data):
                         cdrs = generate_data_cdr(
                             subscriber=sub,
@@ -739,6 +791,7 @@ def run_generation(
                             data_cfg=step_data_cfg,
                             rng=np_rng,
                             _buf=rng_buf,
+                            _cfg=step_data_cfg_cache,
                         )
                         for cdr in cdrs:
                             cdr.first_cell_id = first_cell_id

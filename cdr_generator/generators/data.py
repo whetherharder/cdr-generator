@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -19,6 +20,111 @@ if TYPE_CHECKING:
     from cdr_generator.engine.rng_buffer import _RngBuffer
 
 
+@dataclass(slots=True)
+class _DataCfgCache:
+    """Pre-computed static config for zero-dict-lookup hot path.
+
+    Build once with ``build_data_cfg_cache(data_cfg)`` and pass as
+    ``_cfg`` to ``generate_data_cdr`` to bypass all dict.get calls
+    in the inner generation loop.
+    """
+
+    dur_mu: float
+    dur_sigma: float
+    min_dur: float
+    max_dur: float
+    ul_mu: float
+    ul_sigma: float
+    ul_min: int
+    dl_mu: float
+    dl_sigma: float
+    dl_min: int
+    ul_mult: float
+    dl_mult: float
+    apn_list: list
+    apn_probs: tuple
+    qci_list: list
+    qci_probs: tuple
+    term_list: list
+    term_probs: tuple
+    partial_enabled: bool
+    max_record_duration: float
+    max_record_volume: int
+
+
+def build_data_cfg_cache(data_cfg: dict) -> _DataCfgCache:
+    """Pre-extract all static config values from data_cfg into a fast-access object."""
+    dur_cfg = data_cfg.get("duration", {})
+    dur_dist = dur_cfg.get("distribution", {})
+    dur_params = dur_dist.get("params", {})
+
+    vol_ul_cfg = data_cfg.get("volume_uplink", {})
+    ul_dist = vol_ul_cfg.get("distribution", {})
+    ul_params = ul_dist.get("params", {})
+
+    vol_dl_cfg = data_cfg.get("volume_downlink", {})
+    dl_dist = vol_dl_cfg.get("distribution", {})
+    dl_params = dl_dist.get("params", {})
+
+    # APN
+    apn_weights = data_cfg.get("apn_weights", {"internet": 1.0}) or {"internet": 1.0}
+    apn_list = list(apn_weights.keys())
+    raw_apn_w = list(apn_weights.values())
+    total_apn = sum(raw_apn_w) or 1.0
+    apn_probs = tuple(w / total_apn for w in raw_apn_w)
+
+    # QCI
+    qos_dist = data_cfg.get("qos_distribution", [])
+    if qos_dist:
+        qci_list = [q["qci"] for q in qos_dist]
+        raw_qci_w = [q["weight"] for q in qos_dist]
+        total_qci = sum(raw_qci_w) or 1.0
+        qci_probs = tuple(w / total_qci for w in raw_qci_w)
+    else:
+        qci_list = [9]
+        qci_probs = (1.0,)
+
+    # Termination causes
+    causes = data_cfg.get("termination_causes", [])
+    if causes:
+        term_list = [c["cause"] for c in causes]
+        raw_term_w = [c["weight"] for c in causes]
+        total_term = sum(raw_term_w) or 1.0
+        term_probs = tuple(w / total_term for w in raw_term_w)
+    else:
+        term_list = ["normal_release"]
+        term_probs = (1.0,)
+
+    # Partial records
+    partial_cfg = data_cfg.get("partial_records", {})
+
+    return _DataCfgCache(
+        dur_mu=float(dur_params.get("mu", 0.0)),
+        dur_sigma=float(dur_params.get("sigma", 1.0)),
+        min_dur=float(dur_cfg.get("min_seconds", 5)),
+        max_dur=float(dur_cfg.get("max_seconds", 86400)),
+        ul_mu=float(ul_params.get("mu", 0.0)),
+        ul_sigma=float(ul_params.get("sigma", 1.0)),
+        ul_min=int(vol_ul_cfg.get("min_bytes", 100)),
+        dl_mu=float(dl_params.get("mu", 0.0)),
+        dl_sigma=float(dl_params.get("sigma", 1.0)),
+        dl_min=int(vol_dl_cfg.get("min_bytes", 100)),
+        ul_mult=float(data_cfg.get("_volume_multiplier_uplink", 1.0)),
+        dl_mult=float(data_cfg.get("_volume_multiplier_downlink", 1.0)),
+        apn_list=apn_list,
+        apn_probs=apn_probs,
+        qci_list=qci_list,
+        qci_probs=qci_probs,
+        term_list=term_list,
+        term_probs=term_probs,
+        partial_enabled=bool(partial_cfg.get("enabled", True)),
+        max_record_duration=float(
+            partial_cfg.get("max_record_duration_seconds", 3600)
+        ),
+        max_record_volume=int(partial_cfg.get("max_record_volume_bytes", 104857600)),
+    )
+
+
 def generate_data_cdr(
     subscriber: Subscriber,
     event_time: datetime,
@@ -28,6 +134,7 @@ def generate_data_cdr(
     data_cfg: dict,
     rng: np.random.Generator,
     _buf: _RngBuffer | None = None,
+    _cfg: _DataCfgCache | None = None,
 ) -> list[CDRRecord]:
     """Generate data session CDR records (SGW + PGW pairs).
 
@@ -49,6 +156,10 @@ def generate_data_cdr(
         Numpy random generator for deterministic sampling.
     _buf:
         Optional pre-filled RNG buffer for high-throughput generation.
+    _cfg:
+        Optional pre-computed config cache (build with
+        ``build_data_cfg_cache``).  When provided together with ``_buf``,
+        all dict lookups and weight normalizations are bypassed.
 
     Returns
     -------
@@ -56,6 +167,64 @@ def generate_data_cdr(
         SGW + PGW record pairs. Long sessions produce multiple partial
         records sharing the same charging_id.
     """
+    if _cfg is not None and _buf is not None:
+        # FAST PATH: pre-computed values + buffer-backed RNG.
+        # Zero dict.get calls, zero weight normalization per event.
+        charging_id = _buf.get_int(1, 2**31)
+
+        raw_dur = _buf.get_lognormal(_cfg.dur_mu, _cfg.dur_sigma)
+        duration = float(max(_cfg.min_dur, min(raw_dur, _cfg.max_dur)))
+
+        raw_ul = _buf.get_lognormal(_cfg.ul_mu, _cfg.ul_sigma)
+        uplink_bytes = max(_cfg.ul_min, int(raw_ul))
+        if _cfg.ul_mult != 1.0:
+            uplink_bytes = max(1, int(uplink_bytes * _cfg.ul_mult))
+
+        raw_dl = _buf.get_lognormal(_cfg.dl_mu, _cfg.dl_sigma)
+        downlink_bytes = max(_cfg.dl_min, int(raw_dl))
+        if _cfg.dl_mult != 1.0:
+            downlink_bytes = max(1, int(downlink_bytes * _cfg.dl_mult))
+
+        apn = _cfg.apn_list[_buf.get_choice(len(_cfg.apn_list), _cfg.apn_probs)]
+        qci = _cfg.qci_list[_buf.get_choice(len(_cfg.qci_list), _cfg.qci_probs)]
+        termination_cause = _cfg.term_list[
+            _buf.get_choice(len(_cfg.term_list), _cfg.term_probs)
+        ]
+
+        if _cfg.partial_enabled and duration > _cfg.max_record_duration:
+            return _generate_partial_records(
+                subscriber=subscriber,
+                event_time=event_time,
+                cell=cell,
+                sgw=sgw,
+                pgw=pgw,
+                charging_id=charging_id,
+                total_duration=duration,
+                total_uplink=uplink_bytes,
+                total_downlink=downlink_bytes,
+                max_duration=int(_cfg.max_record_duration),
+                max_volume=_cfg.max_record_volume,
+                apn=apn,
+                qci=qci,
+                termination_cause=termination_cause,
+                rng=rng,
+            )
+        return _create_sgw_pgw_pair(
+            subscriber=subscriber,
+            event_time=event_time,
+            cell=cell,
+            sgw=sgw,
+            pgw=pgw,
+            charging_id=charging_id,
+            duration=duration,
+            uplink_bytes=uplink_bytes,
+            downlink_bytes=downlink_bytes,
+            apn=apn,
+            qci=qci,
+            termination_cause=termination_cause,
+        )
+
+    # SLOW PATH: dict-based config (backward-compatible).
     if _buf is not None:
         charging_id = _buf.get_int(1, 2**31)
     else:

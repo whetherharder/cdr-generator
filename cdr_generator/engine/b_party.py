@@ -49,6 +49,9 @@ def select_b_party(
     config: dict,
     rng: np.random.Generator,
     sub_by_imsi: dict[str, Subscriber] | None = None,
+    a_party_contacts: list[str] | None = None,
+    ext_ratio: float | None = None,
+    contact_threshold: float | None = None,
 ) -> BPartyResult:
     """Select a B-party for the given A-party.
 
@@ -77,14 +80,25 @@ def select_b_party(
         Pre-built IMSI-to-subscriber lookup.  When provided, avoids
         rebuilding the dict on every call (significant when called
         thousands of times in the main generation loop).
+    a_party_contacts:
+        Pre-fetched contact list for ``a_party``.  When provided,
+        avoids the ``contact_book.get()`` dict lookup per call.
+    ext_ratio:
+        Pre-extracted ``external_call_ratio`` value.  When provided
+        together with ``contact_threshold``, avoids two ``config.get()``
+        calls per invocation.
+    contact_threshold:
+        Pre-computed ``ext_ratio + (1 - ext_ratio) * repeat_prob``.
 
     Returns
     -------
     BPartyResult
         The selected B-party.
     """
-    external_ratio = config.get("external_call_ratio", 0.15)
-    repeat_prob = config.get("repeat_call_probability", 0.6)
+    if ext_ratio is None:
+        ext_ratio = config.get("external_call_ratio", 0.15)
+        repeat_prob = config.get("repeat_call_probability", 0.6)
+        contact_threshold = ext_ratio + (1.0 - ext_ratio) * repeat_prob
 
     if sub_by_imsi is None:
         sub_by_imsi = {s.imsi: s for s in subscribers}
@@ -92,7 +106,7 @@ def select_b_party(
     roll = float(rng.random())
 
     # Tier 1: external number
-    if roll < external_ratio and external_numbers:
+    if roll < ext_ratio and external_numbers:
         idx = int(rng.integers(0, len(external_numbers)))
         ext = external_numbers[idx]
         msisdn = ext.msisdn if hasattr(ext, "msisdn") else str(ext)
@@ -105,9 +119,12 @@ def select_b_party(
         )
 
     # Tier 2: contact book
-    contact_threshold = external_ratio + (1.0 - external_ratio) * repeat_prob
-    if roll < contact_threshold:
-        contacts = contact_book.get(a_party.imsi, [])
+    if roll < contact_threshold:  # type: ignore[operator]
+        contacts = (
+            a_party_contacts
+            if a_party_contacts is not None
+            else contact_book.get(a_party.imsi, [])
+        )
         if contacts:
             c_idx = int(rng.integers(0, len(contacts)))
             contact_imsi = contacts[c_idx]

@@ -187,15 +187,40 @@ to_csv_row cumtime: 1.340s → 0.164s (8x speedup in profiling).
 После Tasks 1-4 запустить профайлер повторно и устранить оставшиеся hotspot'ы.
 Типичные кандидаты (реализовать только те, что реально видны в профиле):
 
-- [ ] запустить профайлер повторно, зафиксировать новый top-5
-- [ ] contact_book lookup: кэшировать `contact_book.get_contacts(imsi)` per-subscriber на старте
+- [x] запустить профайлер повторно, зафиксировать новый top-5
+- [x] contact_book lookup: кэшировать `contact_book.get_contacts(imsi)` per-subscriber на старте
   (список контактов стабилен в течение генерации)
-- [ ] vendor extensions: если `_apply_vendor_extensions` в top-5 — batch encode per-step
-- [ ] anomaly pipeline: профилировать overhead batch-apply на write фазе
-- [ ] запустить `pytest tests/ -q --tb=short` — все тесты зелёные
-- [ ] замерить CDR/sec → зафиксировать в плане
+- [x] vendor extensions: если `_apply_vendor_extensions` в top-5 — batch encode per-step
+- [x] anomaly pipeline: профилировать overhead batch-apply на write фазе
+- [x] запустить `pytest tests/ -q --tb=short` — все тесты зелёные
+- [x] замерить CDR/sec → зафиксировать в плане
 
-**After Task 5:** _______ CDR/sec
+**Profiling results (after Tasks 1-4, before Task 5):**
+```
+New top-5 by tottime:
+  1. dict.get:                       0.169s (134,280 calls) — static config lookups in generators
+  2. _weighted_sample_without_repl:  0.136s (200 calls)    — startup: build_contact_book
+  3. list.append:                    0.109s (87,664 calls)  — CDR accumulation
+  4. build_contact_book:             0.103s (1 call)        — one-time startup cost
+  5. run_generation (self):          0.102s (1 call)        — inner loop overhead
+
+Vendor extensions: NOT in top-5 — skipped per plan.
+Anomaly pipeline: NOT in top-5 — skipped per plan.
+```
+
+**Task 5 optimizations applied:**
+- `_DataCfgCache` in data.py: pre-computes apn_probs, qci_probs, term_probs, dur/vol params
+  → bypasses all dict.get in generate_data_cdr hot path
+  → generate_data_cdr cumtime: 0.460s → 0.173s (63% reduction)
+- `_VoiceCfgCache` in voice.py: pre-computes success_rate, cause probs, dur params, jitter_hi
+  → eliminates voice dict.get calls in _generate_failed/successful/forwarded_call
+- `sub_contacts[sub_idx]` in runner.py: pre-built contact list per subscriber
+  → passes a_party_contacts to select_b_party, avoids contact_book.get() per call
+- Pre-extracted `_b_ext_ratio`, `_b_contact_threshold` as floats
+  → eliminates 2 config.get() calls per b_party selection
+- dict.get calls: 134,280 → 78,786 (41% reduction)
+
+**After Task 5:** ~23,000 CDR/sec (100 subs, 24h) — was ~20,000 CDR/sec (~15% improvement)
 
 ---
 
