@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-import uuid
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from cdr_generator.assets.models import Cell, NetworkElement, Subscriber
 from cdr_generator.generators.voice import _sample_distribution, _weighted_choice
 from cdr_generator.models.cdr import CDRRecord
+
+if TYPE_CHECKING:
+    from cdr_generator.engine.rng_buffer import _RngBuffer
 
 
 def generate_sms_cdr(
@@ -20,6 +23,7 @@ def generate_sms_cdr(
     smsc: NetworkElement,
     sms_cfg: dict,
     rng: np.random.Generator,
+    _buf: _RngBuffer | None = None,
 ) -> list[CDRRecord]:
     """Generate SMS CDR records for a single message.
 
@@ -39,6 +43,8 @@ def generate_sms_cdr(
         SMS event configuration dict (from config.events.sms).
     rng:
         Numpy random generator for deterministic sampling.
+    _buf:
+        Optional pre-filled RNG buffer for high-throughput generation.
 
     Returns
     -------
@@ -47,11 +53,15 @@ def generate_sms_cdr(
         successful delivery. MO and MT share a consolidation_id.
     """
     success_rate = sms_cfg.get("delivery_success_rate", 0.97)
-    is_success = rng.random() < success_rate
+    roll = _buf.get_float() if _buf is not None else float(rng.random())
+    is_success = roll < success_rate
 
-    consolidation_id = uuid.UUID(
-        bytes=bytes(rng.integers(0, 256, size=16, dtype="uint8"))
-    ).hex
+    if _buf is not None:
+        consolidation_id = _buf.get_uuid()
+    else:
+        consolidation_id = bytes(
+            rng.integers(0, 256, size=16, dtype="uint8")
+        ).hex()
 
     mo = CDRRecord(
         record_type="mo_sms",
@@ -69,12 +79,12 @@ def generate_sms_cdr(
     )
 
     if not is_success:
-        cause_code = _pick_sms_failure_cause(sms_cfg, rng)
+        cause_code = _pick_sms_failure_cause(sms_cfg, rng, _buf=_buf)
         mo.cause_for_termination = cause_code
         return [mo]
 
     # Successful delivery: add delivery delay for MT record
-    delay = _sample_delivery_delay(sms_cfg, rng)
+    delay = _sample_delivery_delay(sms_cfg, rng, _buf=_buf)
     mt_time = event_time + timedelta(seconds=delay)
 
     mt = CDRRecord(
@@ -95,26 +105,34 @@ def generate_sms_cdr(
     return [mo, mt]
 
 
-def _sample_delivery_delay(sms_cfg: dict, rng: np.random.Generator) -> float:
+def _sample_delivery_delay(
+    sms_cfg: dict,
+    rng: np.random.Generator,
+    _buf: _RngBuffer | None = None,
+) -> float:
     """Sample SMS delivery delay from the configured distribution."""
     delay_cfg = sms_cfg.get("delivery_delay", {})
     dist = delay_cfg.get("distribution", {"type": "constant", "params": {"value": 1.0}})
 
-    raw = _sample_distribution(dist, rng)
+    raw = _sample_distribution(dist, rng, _buf=_buf)
 
     min_s = delay_cfg.get("min_seconds", 0.5)
     max_s = delay_cfg.get("max_seconds", 86400)
     return float(max(min_s, min(raw, max_s)))
 
 
-def _pick_sms_failure_cause(sms_cfg: dict, rng: np.random.Generator) -> int:
+def _pick_sms_failure_cause(
+    sms_cfg: dict,
+    rng: np.random.Generator,
+    _buf: _RngBuffer | None = None,
+) -> int:
     """Pick an SMS failure cause from weighted list."""
     causes = sms_cfg.get("failure_causes", [])
     if not causes:
         return 1  # default generic failure
 
     weights = [c["weight"] for c in causes]
-    _weighted_choice(weights, rng)  # consume RNG for determinism
+    _weighted_choice(weights, rng, _buf=_buf)  # consume RNG for determinism
     # SMS failure causes typically don't have numeric codes in config,
     # use a default absent_subscriber code
     return 1

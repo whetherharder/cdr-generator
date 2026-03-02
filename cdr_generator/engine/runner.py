@@ -99,6 +99,10 @@ def run_generation(
     # Prepare numpy RNG for Poisson sampling and generators
     np_rng = np.random.default_rng(config.meta.seed)
 
+    # PERFORMANCE: Pre-filled RNG buffer to amortise per-event Python overhead.
+    from cdr_generator.engine.rng_buffer import _RngBuffer
+    rng_buf = _RngBuffer(np_rng)
+
     # Phase 4: Initialize special events engine and anomaly pipeline
     special_event_engine = SpecialEventEngine(config.special_events)
     anomaly_pipeline = AnomalyPipeline(config.anomalies, np_rng)
@@ -486,6 +490,7 @@ def run_generation(
                                 voice_cfg=sv_cfg,
                                 rng=np_rng,
                                 forward_target=fwd_target,
+                                _buf=rng_buf,
                             )
                             for cdr in cdrs:
                                 if cdr.served_imsi == sub.imsi:
@@ -525,6 +530,7 @@ def run_generation(
                                 smsc=smsc_ne,
                                 sms_cfg=sms_cfg,
                                 rng=np_rng,
+                                _buf=rng_buf,
                             )
                             for cdr in cdrs:
                                 if cdr.served_imsi == sub.imsi:
@@ -554,6 +560,7 @@ def run_generation(
                                 pgw=pgw_ne,
                                 data_cfg=step_data_cfg,
                                 rng=np_rng,
+                                _buf=rng_buf,
                             )
                             for cdr in cdrs:
                                 cdr.first_cell_id = first_cell_id
@@ -665,6 +672,7 @@ def run_generation(
                             voice_cfg=step_voice_cfg,
                             rng=np_rng,
                             forward_target=fwd_target,
+                            _buf=rng_buf,
                         )
                         for cdr in cdrs:
                             if cdr.served_imsi == sub.imsi:
@@ -702,6 +710,7 @@ def run_generation(
                             smsc=smsc_ne,
                             sms_cfg=sms_cfg,
                             rng=np_rng,
+                            _buf=rng_buf,
                         )
                         for cdr in cdrs:
                             if cdr.served_imsi == sub.imsi:
@@ -729,6 +738,7 @@ def run_generation(
                             pgw=pgw_ne,
                             data_cfg=step_data_cfg,
                             rng=np_rng,
+                            _buf=rng_buf,
                         )
                         for cdr in cdrs:
                             cdr.first_cell_id = first_cell_id

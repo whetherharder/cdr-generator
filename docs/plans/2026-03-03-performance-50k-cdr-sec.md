@@ -116,20 +116,21 @@ Performance test (100 subs, 1h): 13,664 CDR/sec — baseline was 1,528 CDR/sec (
 
 Место: `engine/runner.py` (инициализация до цикла) + generators.
 
-- [ ] реализовать класс `_RngBuffer` (или модуль `engine/rng_buffer.py`) с методами:
+- [x] реализовать класс `_RngBuffer` (или модуль `engine/rng_buffer.py`) с методами:
   - `get_uuid() -> str` — берёт из pre-filled буфера `os.urandom(16).hex()` пачками
   - `get_lognormal(mu, sigma) -> float` — буфер per-(mu, sigma) пары
   - `get_uniform(lo, hi) -> float`
   - `get_choice(n, p) -> int` — `rng.choice(n, p=p, size=BATCH)` пачкой
-- [ ] батчевые UUID: `raw = rng.bytes(16 * BATCH)` → нарезать на 16-байтовые куски → `.hex()`
+- [x] батчевые UUID: `raw = rng.bytes(16 * BATCH)` → нарезать на 16-байтовые куски → `.hex()`
   (или `os.urandom` если не нужен детерминированный seed; для детерминированности — через rng)
-- [ ] заменить вызовы UUID в `generators/voice.py` и `generators/sms.py` на буфер
-- [ ] заменить вызовы `_sample_distribution(lognormal)` на буфер в `generators/voice.py`, `sms.py`, `data.py`
-- [ ] заменить `_weighted_choice` на буфер `rng.choice(n, p=p, size=BATCH)` в generators
-- [ ] запустить `pytest tests/ -q --tb=short` — все тесты зелёные
-- [ ] замерить CDR/sec → зафиксировать в плане
+- [x] заменить вызовы UUID в `generators/voice.py` и `generators/sms.py` на буфер
+- [x] заменить вызовы `_sample_distribution(lognormal)` на буфер в `generators/voice.py`, `sms.py`, `data.py`
+- [x] заменить `_weighted_choice` на буфер `rng.choice(n, p=p, size=BATCH)` в generators
+- [x] запустить `pytest tests/ -q --tb=short` — все тесты зелёные
+- [x] замерить CDR/sec → зафиксировать в плане
 
-**After Task 2:** _______ CDR/sec
+**After Task 2:** 16,868 CDR/sec (200 subs, 24h) — was 12,710 CDR/sec (~33% improvement)
+Performance test (100 subs, 1h): ~19,625 CDR/sec — was 13,664 CDR/sec (~44% improvement)
 
 ---
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -14,6 +15,9 @@ from cdr_generator.generators.voice import (
 )
 from cdr_generator.models.cdr import CDRRecord
 
+if TYPE_CHECKING:
+    from cdr_generator.engine.rng_buffer import _RngBuffer
+
 
 def generate_data_cdr(
     subscriber: Subscriber,
@@ -23,6 +27,7 @@ def generate_data_cdr(
     pgw: NetworkElement,
     data_cfg: dict,
     rng: np.random.Generator,
+    _buf: _RngBuffer | None = None,
 ) -> list[CDRRecord]:
     """Generate data session CDR records (SGW + PGW pairs).
 
@@ -42,6 +47,8 @@ def generate_data_cdr(
         Data event configuration dict (from config.events.data).
     rng:
         Numpy random generator for deterministic sampling.
+    _buf:
+        Optional pre-filled RNG buffer for high-throughput generation.
 
     Returns
     -------
@@ -49,14 +56,17 @@ def generate_data_cdr(
         SGW + PGW record pairs. Long sessions produce multiple partial
         records sharing the same charging_id.
     """
-    charging_id = int(rng.integers(1, 2**31))
+    if _buf is not None:
+        charging_id = _buf.get_int(1, 2**31)
+    else:
+        charging_id = int(rng.integers(1, 2**31))
 
     # Sample session duration
-    duration = _sample_data_duration(data_cfg, rng)
+    duration = _sample_data_duration(data_cfg, rng, _buf=_buf)
 
     # Sample total volumes and apply profile volume multipliers
-    uplink_bytes = _sample_volume(data_cfg["volume_uplink"], rng)
-    downlink_bytes = _sample_volume(data_cfg["volume_downlink"], rng)
+    uplink_bytes = _sample_volume(data_cfg["volume_uplink"], rng, _buf=_buf)
+    downlink_bytes = _sample_volume(data_cfg["volume_downlink"], rng, _buf=_buf)
 
     ul_mult = data_cfg.get("_volume_multiplier_uplink", 1.0)
     dl_mult = data_cfg.get("_volume_multiplier_downlink", 1.0)
@@ -66,13 +76,13 @@ def generate_data_cdr(
         downlink_bytes = max(1, int(downlink_bytes * dl_mult))
 
     # Pick APN
-    apn = _pick_apn(data_cfg, rng)
+    apn = _pick_apn(data_cfg, rng, _buf=_buf)
 
     # Pick QoS/QCI
-    qci = _pick_qci(data_cfg, rng)
+    qci = _pick_qci(data_cfg, rng, _buf=_buf)
 
     # Pick termination cause
-    termination_cause = _pick_termination_cause(data_cfg, rng)
+    termination_cause = _pick_termination_cause(data_cfg, rng, _buf=_buf)
 
     # Determine partial records
     partial_cfg = data_cfg.get("partial_records", {})
@@ -240,25 +250,37 @@ def _create_sgw_pgw_pair(
     return [sgw_record, pgw_record]
 
 
-def _sample_data_duration(data_cfg: dict, rng: np.random.Generator) -> float:
+def _sample_data_duration(
+    data_cfg: dict,
+    rng: np.random.Generator,
+    _buf: _RngBuffer | None = None,
+) -> float:
     """Sample data session duration from the configured distribution."""
     dur_cfg = data_cfg["duration"]
     dist = dur_cfg["distribution"]
-    raw = _sample_distribution(dist, rng)
+    raw = _sample_distribution(dist, rng, _buf=_buf)
     min_s = dur_cfg.get("min_seconds", 5)
     max_s = dur_cfg.get("max_seconds", 86400)
     return float(max(min_s, min(raw, max_s)))
 
 
-def _sample_volume(vol_cfg: dict, rng: np.random.Generator) -> int:
+def _sample_volume(
+    vol_cfg: dict,
+    rng: np.random.Generator,
+    _buf: _RngBuffer | None = None,
+) -> int:
     """Sample a volume in bytes from the configured distribution."""
     dist = vol_cfg["distribution"]
-    raw = _sample_distribution(dist, rng)
+    raw = _sample_distribution(dist, rng, _buf=_buf)
     min_bytes = vol_cfg.get("min_bytes", 100)
     return max(min_bytes, int(raw))
 
 
-def _pick_apn(data_cfg: dict, rng: np.random.Generator) -> str:
+def _pick_apn(
+    data_cfg: dict,
+    rng: np.random.Generator,
+    _buf: _RngBuffer | None = None,
+) -> str:
     """Pick an APN from weighted distribution."""
     apn_weights = data_cfg.get("apn_weights", {"internet": 1.0})
     if not apn_weights:
@@ -266,27 +288,35 @@ def _pick_apn(data_cfg: dict, rng: np.random.Generator) -> str:
 
     apns = list(apn_weights.keys())
     weights = list(apn_weights.values())
-    idx = _weighted_choice(weights, rng)
+    idx = _weighted_choice(weights, rng, _buf=_buf)
     return apns[idx]
 
 
-def _pick_qci(data_cfg: dict, rng: np.random.Generator) -> int:
+def _pick_qci(
+    data_cfg: dict,
+    rng: np.random.Generator,
+    _buf: _RngBuffer | None = None,
+) -> int:
     """Pick a QCI from the QoS distribution."""
     qos_dist = data_cfg.get("qos_distribution", [])
     if not qos_dist:
         return 9  # default bearer
 
     weights = [q["weight"] for q in qos_dist]
-    idx = _weighted_choice(weights, rng)
+    idx = _weighted_choice(weights, rng, _buf=_buf)
     return qos_dist[idx]["qci"]
 
 
-def _pick_termination_cause(data_cfg: dict, rng: np.random.Generator) -> str:
+def _pick_termination_cause(
+    data_cfg: dict,
+    rng: np.random.Generator,
+    _buf: _RngBuffer | None = None,
+) -> str:
     """Pick a data session termination cause from weighted list."""
     causes = data_cfg.get("termination_causes", [])
     if not causes:
         return "normal_release"
 
     weights = [c["weight"] for c in causes]
-    idx = _weighted_choice(weights, rng)
+    idx = _weighted_choice(weights, rng, _buf=_buf)
     return causes[idx]["cause"]
