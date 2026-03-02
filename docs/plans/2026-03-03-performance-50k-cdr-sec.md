@@ -95,16 +95,17 @@ for step_t in time_steps:                    # 1440 итераций
 # Итерировать только np.argwhere(counts > 0)
 ```
 
-- [ ] добавить helper `_build_rate_matrix(sub_profile_pairs, hour, dow, step_seconds, special_mult) -> np.ndarray` shape `(n_subs, 3)` в `engine/runner.py`
-- [ ] реструктурировать основной цикл: группировать шаги по часам (1440 шагов → 24 × 60)
-- [ ] для каждой часовой группы: `counts = rng.poisson(rate_matrix[np.newaxis], size=(60, n_subs, 3))`
-- [ ] использовать `np.argwhere(counts > 0)` → список `(step_offset, sub_idx, event_type, count)`
-- [ ] внутренний цикл по non-zero событиям (только реальные события, не пустые итерации)
-- [ ] убедиться что mobility вызывается только для non-zero (step, sub) пар
-- [ ] запустить `pytest tests/ -q --tb=short` — все тесты зелёные
-- [ ] замерить CDR/sec до и после → зафиксировать в плане
+- [x] добавить helper `_build_rate_matrix(sub_profile_pairs, hour, dow, step_seconds, special_mult) -> np.ndarray` shape `(n_subs, 3)` в `engine/runner.py`
+- [x] реструктурировать основной цикл: группировать шаги по часам (1440 шагов → 24 × 60)
+- [x] для каждой часовой группы: `counts = rng.poisson(rate_matrix[np.newaxis], size=(60, n_subs, 3))`
+- [x] использовать `np.argwhere(counts > 0)` → список `(step_offset, sub_idx, event_type, count)`
+- [x] внутренний цикл по non-zero событиям (только реальные события, не пустые итерации)
+- [x] убедиться что mobility вызывается только для non-zero (step, sub) пар
+- [x] запустить `pytest tests/ -q --tb=short` — все тесты зелёные
+- [x] замерить CDR/sec до и после → зафиксировать в плане
 
-**After Task 1:** _______ CDR/sec
+**After Task 1:** 12,710 CDR/sec (200 subs, 24h) — baseline was 355 CDR/sec (~36x improvement)
+Performance test (100 subs, 1h): 13,664 CDR/sec — baseline was 1,528 CDR/sec (~9x)
 
 ---
 
