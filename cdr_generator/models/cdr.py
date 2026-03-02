@@ -38,7 +38,7 @@ CDR_FIELDS: list[str] = [
 ]
 
 
-@dataclass
+@dataclass(slots=True)
 class CDRRecord:
     """A single CDR record that maps 1-to-1 with a CSV row.
 

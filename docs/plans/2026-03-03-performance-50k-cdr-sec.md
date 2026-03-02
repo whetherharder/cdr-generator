@@ -141,13 +141,13 @@ Performance test (100 subs, 1h): ~19,625 CDR/sec — was 13,664 CDR/sec (~44% im
 
 Место: `models/cdr.py` + `writer/csv_writer.py`.
 
-- [ ] добавить `__slots__` к `CDRRecord` dataclass (или заменить на `typing.NamedTuple`)
-- [ ] убедиться что все поля Optional с default=None сохраняются
-- [ ] проверить что `writer/csv_writer.py` корректно работает с новой структурой
-- [ ] запустить `pytest tests/ -q --tb=short` — все тесты зелёные
-- [ ] замерить CDR/sec → зафиксировать в плане
+- [x] добавить `__slots__` к `CDRRecord` dataclass (или заменить на `typing.NamedTuple`)
+- [x] убедиться что все поля Optional с default=None сохраняются
+- [x] проверить что `writer/csv_writer.py` корректно работает с новой структурой
+- [x] запустить `pytest tests/ -q --tb=short` — все тесты зелёные
+- [x] замерить CDR/sec → зафиксировать в плане
 
-**After Task 3:** _______ CDR/sec
+**After Task 3:** ~17,000 CDR/sec (was 16,868 — improvement within noise; CDRRecord allocation not primary bottleneck)
 
 ---
 
