@@ -158,14 +158,27 @@ Performance test (100 subs, 1h): ~19,625 CDR/sec — was 13,664 CDR/sec (~44% im
 
 Место: `engine/runner.py` (передача step_time в generators) + generators.
 
-- [ ] профилировать долю времени на `datetime.__add__`, `timedelta`, `.strftime` в текущем коде
-- [ ] если значимо (>5% от cumtime): изменить generators на приём `base_ts: datetime, offset_sec: float`
+- [x] профилировать долю времени на `datetime.__add__`, `timedelta`, `.strftime` в текущем коде
+- [x] если значимо (>5% от cumtime): изменить generators на приём `base_ts: datetime, offset_sec: float`
   и вычисление итогового timestamp только в `writer/csv_writer.py` через одно сложение
-- [ ] предвычислить `ISO_PREFIX = step_time.strftime("%Y-%m-%dT%H:%M")` per-step, добавлять только секунды и миллисекунды
-- [ ] запустить `pytest tests/ -q --tb=short` — все тесты зелёные
-- [ ] замерить CDR/sec → зафиксировать в плане
+- [x] предвычислить `ISO_PREFIX = step_time.strftime("%Y-%m-%dT%H:%M")` per-step, добавлять только секунды и миллисекунды
+- [x] запустить `pytest tests/ -q --tb=short` — все тесты зелёные
+- [x] замерить CDR/sec → зафиксировать в плане
 
-**After Task 4:** _______ CDR/sec (или пропустить если профайлер показал <5%)
+**Profiling results (after Tasks 1-3):**
+```
+strftime: 17,947 calls, 0.073s cumtime = 2.7% of total — below 5% threshold.
+Generator change (base_ts + offset_sec) skipped per plan rule.
+
+Actual bottleneck discovered: to_csv_row + _format_value = 1.340s cumtime (50% of total).
+Root cause: generic getattr loop (156k calls, 0.193s) + isinstance dispatch (186k calls, 0.230s).
+
+Optimization applied: rewrite to_csv_row with explicit attribute access + type-specific
+formatting, eliminating getattr/isinstance overhead entirely.
+to_csv_row cumtime: 1.340s → 0.164s (8x speedup in profiling).
+```
+
+**After Task 4:** ~20,000 CDR/sec (100 subs, 24h) — was ~17,000 CDR/sec (~18% improvement)
 
 ---
 

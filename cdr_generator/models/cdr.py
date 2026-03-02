@@ -95,13 +95,69 @@ def _format_value(value: Any) -> str:
     if value is None:
         return ""
     if isinstance(value, datetime):
-        return value.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        return value.strftime("%Y-%m-%dT%H:%M:%S.") + f"{value.microsecond // 1000:03d}Z"
     if isinstance(value, float):
         # Avoid trailing zeros but keep precision
         return f"{value:g}"
     return str(value)
 
 
+def _fmt_dt(dt: datetime) -> str:
+    """Format datetime to ISO-8601 with millisecond precision.
+
+    Faster than strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z" because it avoids
+    a 26-character string allocation and a slice operation.
+    """
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z"
+
+
 def to_csv_row(record: CDRRecord) -> list[str]:
-    """Convert a CDRRecord to a list of string values in CDR_FIELDS order."""
-    return [_format_value(getattr(record, field)) for field in CDR_FIELDS]
+    """Convert a CDRRecord to a list of string values in CDR_FIELDS order.
+
+    Optimized: uses direct attribute access instead of getattr loop, and
+    type-specific formatting instead of isinstance dispatch, eliminating
+    ~350k function calls per 6k records.
+    """
+    # Cache optional fields locally to avoid repeated attribute lookups
+    ans = record.answer_timestamp
+    rel = record.release_timestamp
+    ro = record.record_opening_time
+    rc = record.record_closure_time
+    seq = record.sequence_number
+    cid = record.charging_id
+    dur = record.duration_seconds
+    cft = record.cause_for_termination
+    fc = record.first_cell_id
+    lc = record.last_cell_id
+    ul = record.uplink_volume_bytes
+    dl = record.downlink_volume_bytes
+    qci = record.qci
+
+    return [
+        record.record_type,
+        "" if seq is None else str(seq),
+        record.consolidation_id or "",
+        "" if cid is None else str(cid),
+        record.served_imsi,
+        record.served_msisdn or "",
+        record.served_imei or "",
+        record.calling_number or "",
+        record.called_number or "",
+        record.redirecting_number or "",
+        _fmt_dt(record.event_timestamp),
+        "" if ans is None else _fmt_dt(ans),
+        "" if rel is None else _fmt_dt(rel),
+        "" if dur is None else f"{dur:g}",
+        "" if cft is None else str(cft),
+        "" if fc is None else str(fc),
+        "" if lc is None else str(lc),
+        record.serving_ne_id,
+        "" if ro is None else _fmt_dt(ro),
+        "" if rc is None else _fmt_dt(rc),
+        "" if ul is None else str(ul),
+        "" if dl is None else str(dl),
+        record.apn or "",
+        "" if qci is None else str(qci),
+        record.rat_type or "",
+        record.vendor_extensions or "",
+    ]
