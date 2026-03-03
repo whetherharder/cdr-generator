@@ -1,0 +1,11 @@
+.venv/
+*.egg-info/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+build/
+.env
+
+# ralphex progress logs
+.ralphex/progress/
