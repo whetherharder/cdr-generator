@@ -208,4 +208,4 @@ def generate(
 )
 def estimate(config_path: str) -> None:
     """Estimate CDR volume and anomaly breakdown."""
-    click.echo("Estimate not implemented yet (Phase 4).")
+    raise click.ClickException("estimate command is not yet implemented.")

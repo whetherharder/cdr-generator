@@ -461,9 +461,6 @@ def _sample_distribution(
     elif dist_type == "uniform":
         low = params.get("low", 0.0)
         high = params.get("high", 1.0)
-        if _buf is not None:
-            # Use get_float scaled to range; or just use rng for less common type
-            return float(rng.uniform(low, high))
         return float(rng.uniform(low, high))
     elif dist_type == "poisson":
         lam = params.get("lambda", 1.0)

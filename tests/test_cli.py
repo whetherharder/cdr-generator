@@ -404,14 +404,14 @@ class TestGenerateCommand:
 
 
 class TestEstimateCommand:
-    """Test the estimate CLI command (placeholder)."""
+    """Test the estimate CLI command (not yet implemented)."""
 
-    def test_estimate_runs(
+    def test_estimate_exits_with_error(
         self, runner: CliRunner, sample_config_path: pathlib.Path
     ) -> None:
         result = runner.invoke(main, ["estimate", "--config", str(sample_config_path)])
-        assert result.exit_code == 0
-        assert "not implemented" in result.output.lower() or "Phase" in result.output
+        assert result.exit_code != 0
+        assert "not yet implemented" in result.output.lower()
 
 
 # ===========================================================================

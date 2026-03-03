@@ -422,30 +422,49 @@ def run_generation(
                             else:
                                 continue
                         else:
-                            msc_ne = msc_by_tac.get(home_cell.tac)
-                            if msc_ne is not None:
-                                failed_cdr = CDRRecord(
-                                    record_type="mo_call",
-                                    served_imsi=sub.imsi,
-                                    served_msisdn=sub.msisdn,
-                                    served_imei=sub.imei,
-                                    event_timestamp=step_time,
-                                    calling_number=sub.msisdn,
-                                    called_number="",
-                                    duration_seconds=0.0,
-                                    cause_for_termination=38,
-                                    first_cell_id=first_cell_id,
-                                    last_cell_id=first_cell_id,
-                                    serving_ne_id=msc_ne.id,
-                                    rat_type="eutran",
+                            # Only emit a failed CDR when the subscriber had a
+                            # call scheduled in this time step; avoids generating
+                            # one failed record per subscriber per step (which
+                            # could be orders of magnitude too many records).
+                            _fail_voice_rate = (
+                                effective_rate(
+                                    base_lambda=pc.voice_lambda,
+                                    hourly_weights=pc.voice_weights,
+                                    dow_multipliers=pc.voice_dow,
+                                    hour=s_hour,
+                                    dow=s_dow,
+                                    time_step_seconds=step_seconds,
+                                    weight_sum=pc.voice_weight_sum,
                                 )
-                                ne_id = failed_cdr.serving_ne_id
-                                cdr_date = min(
-                                    failed_cdr.event_timestamp.date(), _end_date
-                                )
-                                records_by_ne_date[(ne_id, cdr_date)].append(failed_cdr)
-                                stats.voice_records += 1
-                                stats.total_records += 1
+                                * sv_mult
+                            )
+                            if sample_count(_fail_voice_rate, np_rng) > 0:
+                                msc_ne = msc_by_tac.get(home_cell.tac)
+                                if msc_ne is not None:
+                                    failed_cdr = CDRRecord(
+                                        record_type="mo_call",
+                                        served_imsi=sub.imsi,
+                                        served_msisdn=sub.msisdn,
+                                        served_imei=sub.imei,
+                                        event_timestamp=step_time,
+                                        calling_number=sub.msisdn,
+                                        called_number="",
+                                        duration_seconds=0.0,
+                                        cause_for_termination=38,
+                                        first_cell_id=first_cell_id,
+                                        last_cell_id=first_cell_id,
+                                        serving_ne_id=msc_ne.id,
+                                        rat_type="eutran",
+                                    )
+                                    ne_id = failed_cdr.serving_ne_id
+                                    cdr_date = min(
+                                        failed_cdr.event_timestamp.date(), _end_date
+                                    )
+                                    records_by_ne_date[(ne_id, cdr_date)].append(
+                                        failed_cdr
+                                    )
+                                    stats.voice_records += 1
+                                    stats.total_records += 1
                             continue
 
                     home_tac = cell.tac
@@ -766,9 +785,9 @@ def run_generation(
                             # Use actual CDR timestamp date to handle MT jitter
                             # that may cross midnight (matches slow-path behavior).
                             _voice_date = min(cdr.event_timestamp.date(), _end_date)
-                            records_by_ne_date[
-                                (cdr.serving_ne_id, _voice_date)
-                            ].append(cdr)
+                            records_by_ne_date[(cdr.serving_ne_id, _voice_date)].append(
+                                cdr
+                            )
                             stats.voice_records += 1
                             stats.total_records += 1
 

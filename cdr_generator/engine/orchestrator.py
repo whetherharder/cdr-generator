@@ -11,6 +11,7 @@ content as workers = 1 (which itself matches ``run_generation()``).
 
 from __future__ import annotations
 
+import hashlib
 from typing import TYPE_CHECKING
 
 from cdr_generator.engine.runner import GenerationStats, run_generation
@@ -65,7 +66,8 @@ def _derive_worker_seed(global_seed: int, shard_id: int) -> int:
     int
         A seed unique to this ``(global_seed, shard_id)`` combination.
     """
-    return global_seed + shard_id + 1
+    digest = hashlib.md5(f"{global_seed}:{shard_id}".encode()).digest()
+    return int.from_bytes(digest[:4], "little")
 
 
 def orchestrate(
