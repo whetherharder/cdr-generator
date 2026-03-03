@@ -537,6 +537,7 @@ def run_generation(
                                 rng=np_rng,
                                 forward_target=fwd_target,
                                 _buf=rng_buf,
+                                _vcfg=voice_cfg_cache if sv_cfg is voice_cfg else None,
                             )
                             for cdr in cdrs:
                                 if cdr.served_imsi == sub.imsi:
@@ -593,6 +594,9 @@ def run_generation(
                     sgw_ne = sgw_by_tac.get(home_tac)
                     if n_data > 0 and sgw_ne is not None and pgw_ne is not None:
                         step_data_cfg = data_cfg_by_profile[sub.profile_name]
+                        step_data_cfg_cache = data_cfg_cache_by_profile[
+                            sub.profile_name
+                        ]
                         for _ in range(n_data):
                             cdrs = generate_data_cdr(
                                 subscriber=sub,
@@ -603,6 +607,7 @@ def run_generation(
                                 data_cfg=step_data_cfg,
                                 rng=np_rng,
                                 _buf=rng_buf,
+                                _cfg=step_data_cfg_cache,
                             )
                             for cdr in cdrs:
                                 cdr.first_cell_id = first_cell_id
@@ -697,8 +702,9 @@ def run_generation(
 
                 # PERFORMANCE: Pre-compute CDR date once per active pair.
                 # step_time is always within [start_dt, end_dt] by construction
-                # so step_time.date() <= _end_date always holds.  MT CDR jitter
-                # is sub-minute and won't cross a day boundary for the MO step.
+                # so step_time.date() <= _end_date always holds.  Used for voice
+                # CDRs (MT jitter is sub-minute, never crosses midnight) and the
+                # base date for other types that need per-record date checks.
                 step_cdr_date = step_time.date()
 
                 _sub_contacts = sub_contacts[sub_idx]
@@ -838,8 +844,12 @@ def run_generation(
                                     _apply_vendor_extensions(
                                         cdr, serving_ne, vendor_ext_cfg, np_rng
                                     )
+                            # Data partial records can span midnight; use
+                            # actual event_timestamp date (not step date)
+                            # to match slow-path bucketing.
+                            _data_cdr_date = min(cdr.event_timestamp.date(), _end_date)
                             records_by_ne_date[
-                                (cdr.serving_ne_id, step_cdr_date)
+                                (cdr.serving_ne_id, _data_cdr_date)
                             ].append(cdr)
                             stats.data_records += 1
                             stats.total_records += 1
