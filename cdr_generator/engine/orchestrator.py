@@ -23,9 +23,9 @@ if TYPE_CHECKING:
 def shard_subscribers(subscribers: list, n_shards: int) -> list[list]:
     """Split *subscribers* into *n_shards* roughly equal chunks.
 
-    Uses contiguous slicing so that relative order within each shard is
-    preserved.  When *n_shards* exceeds ``len(subscribers)`` the extra
-    shards are empty lists.
+    Uses round-robin interleaving so that subscribers are distributed
+    evenly across shards.  When *n_shards* exceeds ``len(subscribers)``
+    the extra shards are empty lists.
 
     Parameters
     ----------

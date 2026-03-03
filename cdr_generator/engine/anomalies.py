@@ -412,7 +412,7 @@ def apply_timestamp_anomalies(
             if anomaly == "future_timestamp":
                 _apply_future_timestamp(rec, rng)
             elif anomaly == "negative_duration":
-                _apply_negative_duration(rec, rng)
+                _apply_negative_duration(rec)
             elif anomaly == "midnight_rollover":
                 _apply_midnight_rollover(rec, rng)
             count += 1
@@ -426,7 +426,7 @@ def _apply_future_timestamp(rec: CDRRecord, rng: np.random.Generator) -> None:
     rec.event_timestamp = rec.event_timestamp + timedelta(days=days)
 
 
-def _apply_negative_duration(rec: CDRRecord, rng: np.random.Generator) -> None:
+def _apply_negative_duration(rec: CDRRecord) -> None:
     """Set duration_seconds negative, or set release_timestamp before answer_timestamp."""
     if rec.answer_timestamp is not None and rec.release_timestamp is not None:
         # Swap release and answer so release < answer

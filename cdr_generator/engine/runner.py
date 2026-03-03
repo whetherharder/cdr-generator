@@ -903,11 +903,6 @@ def run_generation(
         )
         combined_anomaly_stats.duplicate_count += anomaly_batch_stats.duplicate_count
 
-        # Update total_records to reflect anomaly changes
-        stats.total_records += (
-            anomaly_batch_stats.duplicate_count - anomaly_batch_stats.orphaned_count
-        )
-
         # Sort by event_timestamp
         records.sort(key=lambda r: r.event_timestamp)
         writer.write_file(ne_id=ne_id, file_date=file_date, records=records)

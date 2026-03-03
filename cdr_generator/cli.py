@@ -196,16 +196,3 @@ def generate(
     )
     if workers > 1:
         click.echo(f"  Workers: {workers}")
-
-
-@main.command()
-@click.option(
-    "--config",
-    "config_path",
-    required=True,
-    type=click.Path(exists=True),
-    help="Path to YAML config file.",
-)
-def estimate(config_path: str) -> None:
-    """Estimate CDR volume and anomaly breakdown."""
-    raise click.ClickException("estimate command is not yet implemented.")

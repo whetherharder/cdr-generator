@@ -201,11 +201,9 @@ def generate_data_cdr(
                 total_uplink=uplink_bytes,
                 total_downlink=downlink_bytes,
                 max_duration=int(_cfg.max_record_duration),
-                max_volume=_cfg.max_record_volume,
                 apn=apn,
                 qci=qci,
                 termination_cause=termination_cause,
-                rng=rng,
             )
         return _create_sgw_pgw_pair(
             subscriber=subscriber,
@@ -255,7 +253,6 @@ def generate_data_cdr(
     partial_cfg = data_cfg.get("partial_records", {})
     partial_enabled = partial_cfg.get("enabled", True)
     max_duration = partial_cfg.get("max_record_duration_seconds", 3600)
-    max_volume = partial_cfg.get("max_record_volume_bytes", 104857600)
 
     if partial_enabled and duration > max_duration:
         return _generate_partial_records(
@@ -269,11 +266,9 @@ def generate_data_cdr(
             total_uplink=uplink_bytes,
             total_downlink=downlink_bytes,
             max_duration=max_duration,
-            max_volume=max_volume,
             apn=apn,
             qci=qci,
             termination_cause=termination_cause,
-            rng=rng,
         )
 
     # Single SGW + PGW pair
@@ -304,11 +299,9 @@ def _generate_partial_records(
     total_uplink: int,
     total_downlink: int,
     max_duration: int,
-    max_volume: int,
     apn: str,
     qci: int,
     termination_cause: int | None,
-    rng: np.random.Generator,
 ) -> list[CDRRecord]:
     """Split a long session into multiple partial records."""
     num_parts = max(1, math.ceil(total_duration / max_duration))
