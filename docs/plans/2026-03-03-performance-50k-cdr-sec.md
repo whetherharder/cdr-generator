@@ -261,12 +261,13 @@ ruff check: 0 errors
 
 ### Task N-1: Коммит и PR
 
-- [ ] `git checkout develop && git pull`
-- [ ] `git checkout -b feature/performance-50k-optimization`
-- [ ] `git add` конкретные файлы (не `git add .`)
-- [ ] `pytest tests/ -q --tb=short` — финальная проверка перед коммитом
-- [ ] `git commit -m "perf: vectorized Poisson + batch RNG — 50k CDR/sec single core"`
-- [ ] `gh pr create --base develop`
+- [x] `git checkout develop && git pull`
+- [x] `git checkout -b feature/performance-50k-optimization`
+- [x] `git add` конкретные файлы (не `git add .`)
+- [x] `pytest tests/ -q --tb=short` — финальная проверка перед коммитом (436 passed, 1 skipped)
+- [x] `git commit -m "perf: vectorized Poisson + batch RNG — 50k CDR/sec single core"`
+- [x] branch pushed to origin — PR: https://github.com/whetherharder/cdr-generator/pull/new/feature/performance-50k-optimization
+  (`gh` not installed; create PR via GitHub web UI or install gh CLI)
 
 ---
 
