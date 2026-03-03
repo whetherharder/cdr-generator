@@ -16,6 +16,7 @@ import pstats
 import sys
 import tempfile
 import time
+import warnings
 from pathlib import Path
 
 # Ensure the project root is on sys.path
@@ -38,7 +39,7 @@ def build_benchmark_config(
     hours:
         Duration of simulation in hours (from midnight).
     """
-    end_hour = min(hours, 23)
+    end_hour = min(hours - 1, 23)
     end_minute = 59
     end_second = 59
 
@@ -540,8 +541,12 @@ def _prime_specializer() -> None:
                     )
                 )
             )
-    except Exception:
-        pass  # Warmup failure must never break test collection
+    except Exception as exc:  # Warmup failure must never break test collection
+        warnings.warn(
+            f"_prime_specializer warmup failed ({exc!r}); performance test may run cold",
+            RuntimeWarning,
+            stacklevel=1,
+        )
 
 
 _prime_specializer()
