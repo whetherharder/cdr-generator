@@ -5,3 +5,7 @@ __pycache__/
 .pytest_cache/
 dist/
 build/
+.env
+
+# ralphex progress logs
+.ralphex/progress/

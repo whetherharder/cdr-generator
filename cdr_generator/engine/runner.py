@@ -24,13 +24,17 @@ from cdr_generator.engine.b_party import BPartyResult, select_b_party
 from cdr_generator.engine.mobility import resolve_position
 from cdr_generator.engine.poisson import sample_count
 from cdr_generator.engine.rates import effective_rate
+from cdr_generator.engine.rng_buffer import _RngBuffer
 from cdr_generator.engine.special_events import SpecialEventEngine
+from cdr_generator.generators.data import build_data_cfg_cache, generate_data_cdr
 from cdr_generator.generators.extensions import generate_extensions
+from cdr_generator.generators.sms import generate_sms_cdr
+from cdr_generator.generators.voice import build_voice_cfg_cache, generate_voice_cdr
 from cdr_generator.models.cdr import CDRRecord
 from cdr_generator.writer.csv_writer import CsvWriter, create_empty_output
 
 
-@dataclass
+@dataclass(slots=True)
 class GenerationStats:
     """Statistics collected during CDR generation."""
 
@@ -100,7 +104,6 @@ def run_generation(
     np_rng = np.random.default_rng(config.meta.seed)
 
     # PERFORMANCE: Pre-filled RNG buffer to amortise per-event Python overhead.
-    from cdr_generator.engine.rng_buffer import _RngBuffer
     rng_buf = _RngBuffer(np_rng)
 
     # Phase 4: Initialize special events engine and anomaly pipeline
@@ -138,17 +141,6 @@ def run_generation(
 
     # Accumulate CDRs per (ne_id, date) for sorting before write
     records_by_ne_date: dict[tuple[str, date], list[CDRRecord]] = defaultdict(list)
-
-    # Import generators and config cache builders
-    from cdr_generator.generators.data import (
-        build_data_cfg_cache,
-        generate_data_cdr,
-    )
-    from cdr_generator.generators.sms import generate_sms_cdr
-    from cdr_generator.generators.voice import (
-        build_voice_cfg_cache,
-        generate_voice_cdr,
-    )
 
     # Vendor extension config lookup
     vendor_ext_cfg = config.vendor_extensions
@@ -272,6 +264,23 @@ def run_generation(
         _b_ext_ratio + (1.0 - _b_ext_ratio) * _b_repeat_prob
     )
     _n_ext = len(external_numbers)
+
+    # PERFORMANCE: Pre-cache per-subscriber home cell, TAC, and NE lookups
+    # to eliminate 5-7 dict lookups per active (step, sub) event pair.
+    # For the common case (no roaming), cell/TAC never changes.
+    sub_home_cells = [cells_by_id[sub.home_cell_id] for sub, _ in sub_profile_pairs]
+    sub_home_tacs = [sub_home_cells[i].tac for i in range(len(sub_profile_pairs))]
+    sub_msc_nes = [msc_by_tac.get(sub_home_tacs[i]) for i in range(len(sub_profile_pairs))]
+    sub_smsc_nes = [smsc_by_tac.get(sub_home_tacs[i]) for i in range(len(sub_profile_pairs))]
+    sub_sgw_nes = [sgw_by_tac.get(sub_home_tacs[i]) for i in range(len(sub_profile_pairs))]
+    sub_data_cfgs = [data_cfg_by_profile[sub.profile_name] for sub, _ in sub_profile_pairs]
+    sub_data_cfg_caches_list = [
+        data_cfg_cache_by_profile[sub.profile_name] for sub, _ in sub_profile_pairs
+    ]
+
+    # PERFORMANCE: Skip _apply_vendor_extensions entirely when no vendor
+    # extensions are configured (avoids 1 function call per CDR record).
+    _has_vendor_ext = bool(vendor_ext_cfg)
 
     # ------------------------------------------------------------------
     # PERFORMANCE: Vectorized rate matrix builder (closure over locals)
@@ -645,15 +654,24 @@ def run_generation(
             # counts.any(axis=2) is True wherever any event type > 0
             active_pairs = np.argwhere(counts.any(axis=2))
 
-            for step_sub in active_pairs:
-                step_idx = int(step_sub[0])
-                sub_idx = int(step_sub[1])
+            # PERFORMANCE: Pre-extract counts for all active pairs with one
+            # vectorized fancy-index call + single .tolist() conversion.
+            # Avoids N×3 numpy scalar lookups + N×3 int() casts per loop.
+            if len(active_pairs):
+                _active_counts = counts[
+                    active_pairs[:, 0], active_pairs[:, 1], :
+                ].tolist()
+            else:
+                _active_counts = []
+            _active_pairs_list = active_pairs.tolist()
+
+            for _ap_i, step_sub in enumerate(_active_pairs_list):
+                step_idx, sub_idx = step_sub
                 step_time = hour_steps[step_idx]
                 sub, pc = sub_profile_pairs[sub_idx]
 
-                home_cell = cells_by_id.get(sub.home_cell_id)
-                if home_cell is None:
-                    continue
+                # PERFORMANCE: Use pre-cached home cell (avoids dict lookup)
+                home_cell = sub_home_cells[sub_idx]
 
                 # Resolve position only for subscribers with actual events
                 first_cell_id, last_cell_id = resolve_position(
@@ -664,18 +682,37 @@ def run_generation(
                     cells_by_id=cells_by_id,
                     rng=np_rng,
                     all_cell_ids=all_cell_ids,
+                    _buf=rng_buf,
                 )
-                cell = cells_by_id.get(first_cell_id, home_cell)
-                home_tac = cell.tac
+                # PERFORMANCE: Fast path when no mobility occurred (common case)
+                if first_cell_id == sub.home_cell_id:
+                    cell = home_cell
+                    msc_ne = sub_msc_nes[sub_idx]
+                    smsc_ne = sub_smsc_nes[sub_idx]
+                    sgw_ne = sub_sgw_nes[sub_idx]
+                else:
+                    cell = cells_by_id.get(first_cell_id, home_cell)
+                    _tac = cell.tac
+                    if _tac == sub_home_tacs[sub_idx]:
+                        msc_ne = sub_msc_nes[sub_idx]
+                        smsc_ne = sub_smsc_nes[sub_idx]
+                        sgw_ne = sub_sgw_nes[sub_idx]
+                    else:
+                        msc_ne = msc_by_tac.get(_tac)
+                        smsc_ne = smsc_by_tac.get(_tac)
+                        sgw_ne = sgw_by_tac.get(_tac)
 
-                n_voice = int(counts[step_idx, sub_idx, 0])
-                n_sms = int(counts[step_idx, sub_idx, 1])
-                n_data = int(counts[step_idx, sub_idx, 2])
+                n_voice, n_sms, n_data = _active_counts[_ap_i]
 
-                # --- Voice MO ---
-                msc_ne = msc_by_tac.get(home_tac)
+                # PERFORMANCE: Pre-compute CDR date once per active pair.
+                # step_time is always within [start_dt, end_dt] by construction
+                # so step_time.date() <= _end_date always holds.  MT CDR jitter
+                # is sub-minute and won't cross a day boundary for the MO step.
+                step_cdr_date = step_time.date()
+
                 _sub_contacts = sub_contacts[sub_idx]
 
+                # --- Voice MO ---
                 if n_voice > 0 and msc_ne is not None:
                     # Use pre-built contact list and pre-extracted ratio constants
                     for _ in range(n_voice):
@@ -726,17 +763,17 @@ def run_generation(
                             if cdr.served_imsi == sub.imsi:
                                 cdr.first_cell_id = first_cell_id
                                 cdr.last_cell_id = last_cell_id
-                            _apply_vendor_extensions(
-                                cdr, msc_ne, vendor_ext_cfg, np_rng
-                            )
-                            ne_id = cdr.serving_ne_id
-                            cdr_date = min(cdr.event_timestamp.date(), _end_date)
-                            records_by_ne_date[(ne_id, cdr_date)].append(cdr)
+                            if _has_vendor_ext:
+                                _apply_vendor_extensions(
+                                    cdr, msc_ne, vendor_ext_cfg, np_rng
+                                )
+                            records_by_ne_date[
+                                (cdr.serving_ne_id, step_cdr_date)
+                            ].append(cdr)
                             stats.voice_records += 1
                             stats.total_records += 1
 
                 # --- SMS MO ---
-                smsc_ne = smsc_by_tac.get(home_tac)
                 if n_sms > 0 and smsc_ne is not None:
                     for _ in range(n_sms):
                         b_result = select_b_party(
@@ -767,20 +804,21 @@ def run_generation(
                             if cdr.served_imsi == sub.imsi:
                                 cdr.first_cell_id = first_cell_id
                                 cdr.last_cell_id = last_cell_id
-                            _apply_vendor_extensions(
-                                cdr, smsc_ne, vendor_ext_cfg, np_rng
-                            )
-                            ne_id = cdr.serving_ne_id
-                            cdr_date = min(cdr.event_timestamp.date(), _end_date)
-                            records_by_ne_date[(ne_id, cdr_date)].append(cdr)
+                            if _has_vendor_ext:
+                                _apply_vendor_extensions(
+                                    cdr, smsc_ne, vendor_ext_cfg, np_rng
+                                )
+                            records_by_ne_date[
+                                (cdr.serving_ne_id, step_cdr_date)
+                            ].append(cdr)
                             stats.sms_records += 1
                             stats.total_records += 1
 
                 # --- Data session ---
-                sgw_ne = sgw_by_tac.get(home_tac)
                 if n_data > 0 and sgw_ne is not None and pgw_ne is not None:
-                    step_data_cfg = data_cfg_by_profile[sub.profile_name]
-                    step_data_cfg_cache = data_cfg_cache_by_profile[sub.profile_name]
+                    # PERFORMANCE: use pre-cached data config (avoids 2 dict lookups)
+                    step_data_cfg = sub_data_cfgs[sub_idx]
+                    step_data_cfg_cache = sub_data_cfg_caches_list[sub_idx]
                     for _ in range(n_data):
                         cdrs = generate_data_cdr(
                             subscriber=sub,
@@ -796,14 +834,15 @@ def run_generation(
                         for cdr in cdrs:
                             cdr.first_cell_id = first_cell_id
                             cdr.last_cell_id = last_cell_id
-                            serving_ne = nes_by_id.get(cdr.serving_ne_id)
-                            if serving_ne is not None:
-                                _apply_vendor_extensions(
-                                    cdr, serving_ne, vendor_ext_cfg, np_rng
-                                )
-                            ne_id = cdr.serving_ne_id
-                            cdr_date = min(cdr.event_timestamp.date(), _end_date)
-                            records_by_ne_date[(ne_id, cdr_date)].append(cdr)
+                            if _has_vendor_ext:
+                                serving_ne = nes_by_id.get(cdr.serving_ne_id)
+                                if serving_ne is not None:
+                                    _apply_vendor_extensions(
+                                        cdr, serving_ne, vendor_ext_cfg, np_rng
+                                    )
+                            records_by_ne_date[
+                                (cdr.serving_ne_id, step_cdr_date)
+                            ].append(cdr)
                             stats.data_records += 1
                             stats.total_records += 1
 

@@ -23,6 +23,7 @@ import numpy as np
 if TYPE_CHECKING:
     from cdr_generator.assets.models import Cell
     from cdr_generator.config.models import MobilityConfig
+    from cdr_generator.engine.rng_buffer import _RngBuffer
 
 
 def resolve_position(
@@ -33,6 +34,7 @@ def resolve_position(
     cells_by_id: dict[int, Cell],
     rng: np.random.Generator,
     all_cell_ids: list[int] | None = None,
+    _buf: _RngBuffer | None = None,
 ) -> tuple[int, int]:
     """Determine the subscriber's cell position at a given time.
 
@@ -65,6 +67,10 @@ def resolve_position(
     all_cell_ids:
         Pre-computed list of all cell IDs (for roaming).  When provided,
         avoids repeated ``list(cells_by_id.keys())`` calls.
+    _buf:
+        Optional pre-filled RNG buffer.  When provided, uniform float draws
+        (roaming and handover checks) are served from the pre-filled batch
+        instead of calling rng.random() directly (~8x lower per-call cost).
 
     Returns
     -------
@@ -73,13 +79,14 @@ def resolve_position(
     """
     # Check roaming first
     roaming_prob = mobility.roaming_probability
-    if roaming_prob > 0 and float(rng.random()) < roaming_prob:
+    rand_fn = _buf.get_float if _buf is not None else lambda: float(rng.random())
+    if roaming_prob > 0 and rand_fn() < roaming_prob:
         if all_cell_ids is None:
             all_cell_ids = list(cells_by_id.keys())
         if all_cell_ids:
             idx = int(rng.integers(0, len(all_cell_ids)))
             first_cell = all_cell_ids[idx]
-            last_cell = _maybe_handover(first_cell, mobility, cells_by_id, rng)
+            last_cell = _maybe_handover(first_cell, mobility, cells_by_id, rng, _buf)
             return first_cell, last_cell
 
     hour = timestamp.hour
@@ -90,14 +97,14 @@ def resolve_position(
         first_cell = home_cell_id
     # Commute hours: transit (neighbor of home or work)
     elif commute_hours and hour in commute_hours:
-        first_cell = _commute_cell(home_cell_id, work_cell_id, cells_by_id, rng)
+        first_cell = _commute_cell(home_cell_id, work_cell_id, cells_by_id, rng, _buf)
     # Work hours: work cell if available
     elif work_cell_id is not None:
         first_cell = work_cell_id
     else:
         first_cell = home_cell_id
 
-    last_cell = _maybe_handover(first_cell, mobility, cells_by_id, rng)
+    last_cell = _maybe_handover(first_cell, mobility, cells_by_id, rng, _buf)
     return first_cell, last_cell
 
 
@@ -106,10 +113,12 @@ def _maybe_handover(
     mobility: MobilityConfig,
     cells_by_id: dict[int, Cell],
     rng: np.random.Generator,
+    _buf: _RngBuffer | None = None,
 ) -> int:
     """Possibly return a different (neighbor) cell for handover."""
     handover_prob = mobility.handover_during_call
-    if handover_prob <= 0 or float(rng.random()) >= handover_prob:
+    rand_val = _buf.get_float() if _buf is not None else float(rng.random())
+    if handover_prob <= 0 or rand_val >= handover_prob:
         return first_cell_id
 
     cell = cells_by_id.get(first_cell_id)
@@ -129,10 +138,12 @@ def _commute_cell(
     work_cell_id: int | None,
     cells_by_id: dict[int, Cell],
     rng: np.random.Generator,
+    _buf: _RngBuffer | None = None,
 ) -> int:
     """Select a transit cell during commute hours."""
     # Pick base: either home or work (50/50 if work exists)
-    if work_cell_id is not None and float(rng.random()) < 0.5:
+    rand_val = _buf.get_float() if _buf is not None else float(rng.random())
+    if work_cell_id is not None and rand_val < 0.5:
         base_id = work_cell_id
     else:
         base_id = home_cell_id
