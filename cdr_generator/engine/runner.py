@@ -342,7 +342,7 @@ def run_generation(
         dow = current.weekday()
 
         # Phase 4: Get active special event effects for this hour block
-        # (using first step — recurring events are constant within an hour)
+        # (using first step; stability across the hour is verified below)
         effects = special_event_engine.get_active_effects(current)
 
         # Prepare voice config with failure rate override if active
@@ -371,7 +371,24 @@ def run_generation(
         n_steps = len(hour_steps)
         n_subs = len(sub_profile_pairs)
 
-        if has_disabled_cells or n_subs == 0:
+        # Verify that special-event effects are stable across the full hour
+        # block.  Recurring events (hour-gated) are always stable; time-ranged
+        # events with non-hour boundaries may change mid-hour.  When effects
+        # differ between the first and last step, fall back to the slow path
+        # so that every step is evaluated individually.
+        _effects_stable = True
+        if hour_steps:
+            _last_effects = special_event_engine.get_active_effects(hour_steps[-1])
+            _effects_stable = (
+                _last_effects.voice_rate_multiplier == voice_mult
+                and _last_effects.sms_rate_multiplier == sms_mult
+                and _last_effects.data_rate_multiplier == data_mult
+                and _last_effects.voice_failure_rate_override
+                == effects.voice_failure_rate_override
+                and (len(_last_effects.disabled_cells) > 0) == has_disabled_cells
+            )
+
+        if has_disabled_cells or not _effects_stable or n_subs == 0:
             # -------------------------------------------------------
             # Slow path: per-step, per-subscriber loop.
             # Used when disabled cells are active (rare) to preserve

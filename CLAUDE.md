@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **CDR Generator** — Python CLI tool for generating synthetic Call Detail Records (CDR) for telecom network testing. Produces realistic CSV+gzip files per Network Element per day.
 
-**Status**: All 6 phases complete (436 tests passing, 1 skipped). Performance optimization branch achieves ~57k CDR/sec (14% above 50k target). See `PROGRESS.md` for phase history. `cdr_generator_config.yaml` is the reference config (v0.7).
+**Status**: All 6 phases complete (435 tests passing, 1 skipped). Performance optimization branch achieves ~57k CDR/sec (14% above 50k target). See `PROGRESS.md` for phase history. `cdr_generator_config.yaml` is the reference config (v0.7).
 
 ## Commands
 
