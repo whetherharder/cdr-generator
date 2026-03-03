@@ -66,7 +66,9 @@ def _derive_worker_seed(global_seed: int, shard_id: int) -> int:
     int
         A seed unique to this ``(global_seed, shard_id)`` combination.
     """
-    digest = hashlib.md5(f"{global_seed}:{shard_id}".encode()).digest()
+    digest = hashlib.md5(
+        f"{global_seed}:{shard_id}".encode(), usedforsecurity=False
+    ).digest()
     return int.from_bytes(digest[:4], "little")
 
 

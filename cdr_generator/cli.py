@@ -161,7 +161,10 @@ def generate(
     # Load or generate assets
     config_hash = compute_config_hash(cfg_path)
     if assets_path.exists() and (assets_path / "manifest.json").exists():
-        cells, nes, subs, manifest = load_assets(assets_path)
+        try:
+            cells, nes, subs, manifest = load_assets(assets_path)
+        except Exception as exc:
+            raise click.ClickException(f"Failed to load assets: {exc}") from exc
         if manifest.config_hash != config_hash:
             click.echo(
                 "Config changed since last asset generation. Regenerating...", err=True
