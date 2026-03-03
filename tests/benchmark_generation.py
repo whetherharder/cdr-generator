@@ -39,7 +39,7 @@ def build_benchmark_config(
         Duration of simulation in hours (from midnight).
     """
     end_hour = min(hours, 23)
-    end_minute = 59 if hours >= 24 else 59
+    end_minute = 59
     end_second = 59
 
     if hours > 24:

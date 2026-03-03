@@ -87,6 +87,10 @@ def test_throughput_scales_linearly():
             )
             config = CDRGeneratorConfig(**config_dict)
 
+            # Untimed warmup ensures CPython's adaptive specializer and the
+            # _fmt_dt lru_cache are in equivalent state for both measurements.
+            run_generation(config)
+
             t0 = time.perf_counter()
             stats = run_generation(config)
             elapsed = time.perf_counter() - t0

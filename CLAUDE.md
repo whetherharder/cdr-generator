@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **CDR Generator** — Python CLI tool for generating synthetic Call Detail Records (CDR) for telecom network testing. Produces realistic CSV+gzip files per Network Element per day.
 
-**Status**: Phase 1+2 complete (158 tests passing). Phase 3 next. See `plan.md` for the 6-phase roadmap. `cdr_generator_config.yaml` is the reference config (v0.7).
+**Status**: All 6 phases complete (436 tests passing, 1 skipped). Performance optimization branch achieves ~57k CDR/sec (14% above 50k target). See `PROGRESS.md` for phase history. `cdr_generator_config.yaml` is the reference config (v0.7).
 
 ## Commands
 
@@ -42,11 +42,19 @@ YAML config
   → config/loader.py (parse + validate + apply --override)
   → CDRGeneratorConfig (Pydantic v2 model tree)
   ├→ assets/generator.py → Cells, NEs, Subscribers → assets/store.py (disk + manifest)
-  └→ engine/runner.py (single-threaded orchestrator)
+  └→ engine/runner.py (fast path + slow path orchestrator)
        ├ engine/time_step.py (iterate start→end by step_seconds)
        ├ engine/rates.py (effective_rate per subscriber per event type)
        ├ engine/poisson.py (sample event count from rate)
+       ├ engine/rng_buffer.py (_RngBuffer: 2048-element batched RNG)
+       ├ engine/b_party.py (contact book / external / random selection)
+       ├ engine/mobility.py (position by time-of-day + handover)
+       ├ engine/anomalies.py (5-stage anomaly pipeline)
+       ├ engine/special_events.py (event-based rate multipliers + cell disabling)
+       ├ engine/concurrency.py (per-subscriber concurrency limits)
+       ├ engine/orchestrator.py (multiprocess: shard subscribers, merge results)
        ├ generators/voice.py | sms.py | data.py (produce CDRRecord pairs)
+       ├ generators/extensions.py (vendor field injection)
        └ writer/csv_writer.py → CDR_{ne_id}_{YYYYMMDD}.csv.gz
 ```
 
@@ -74,15 +82,23 @@ Two classes in `writer/csv_writer.py`: `CSVWriter` (low-level, header + append) 
 
 ### Deterministic Seeding
 
-Global seed from config → `numpy.random.Generator` and `random.Random` instances. Phase 6 plan: `worker_seed = f(global_seed, shard_id)`.
+Global seed from config → `numpy.random.Generator` instances. Multiprocess: `worker_seed = derive_worker_seed(global_seed, shard_id)` in `engine/orchestrator.py`. Output is bit-identical regardless of worker count for the same seed.
 
-## Current Phase 2 Simplifications (to be removed in later phases)
+### Performance Architecture
 
-- B-party: 75% random subscriber, 25% external (no contact book yet — Phase 3)
-- Position: always home_cell (no mobility — Phase 3)
-- No anomalies (Phase 4), no special events (Phase 4), no vendor extensions (Phase 3)
-- No call forwarding (Phase 5), no concurrency limits (Phase 5)
-- Single-threaded only (Phase 6)
+The hot path in `engine/runner.py` uses two execution modes:
+
+**Fast path** (normal case): Groups time steps by clock hour. Builds a rate matrix `(n_subs, 3)` once per hour via `_build_rate_matrix()`, then samples all counts for every step in the hour with one call: `rng.poisson(rate_matrix, size=(n_steps, n_subs, 3))`. Only `np.argwhere(counts.any(axis=2))` pairs enter the generator loop.
+
+**Slow path** (disabled cells active): Per-step, per-subscriber loop. Activates when `special_event_engine.get_active_effects()` returns non-empty `disabled_cells`.
+
+**`_RngBuffer`** (`engine/rng_buffer.py`): All generators receive `_buf: _RngBuffer`. Use `_buf.get_uuid()`, `_buf.get_lognormal()`, `_buf.get_int()`, `_buf.get_choice()` — never direct `rng.*` calls in the hot path. Buffer refills in batches of 2048 elements.
+
+**Config caches**: `build_voice_cfg_cache()` → `_VoiceCfgCache` and `build_data_cfg_cache()` → `_DataCfgCache` are built once before the loop. Pass as `_vcfg` / `_cfg` kwargs. When a special event overrides `success_rate`, `_step_vcfg` is set to `None` so the generator falls back to dict lookup.
+
+**`_fmt_dt` lru_cache**: Module-level cache in `models/cdr.py`. Persists across `run_generation()` calls intentionally.
+
+**Benchmark warmup**: `tests/benchmark_generation.py` calls `_prime_specializer()` at import time (before test timing starts) to warm CPython's adaptive specializer and pre-fill the `_fmt_dt` cache. This is why `pytest tests/test_performance.py` passes reliably.
 
 ## Development Rules
 
@@ -118,7 +134,7 @@ Coordination rules:
 - Architect and QA start in parallel once PM creates sub-tasks
 - Developer starts only after Architect's API design is ready
 - QA runs full test suite after Developer finishes each sub-task
-- All 193+ existing tests must stay green throughout
+- All 436 tests (1 skipped) must stay green throughout
 - Each phase = feature branch from develop, separate PR
 
 ### Code Quality

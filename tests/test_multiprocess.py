@@ -282,14 +282,13 @@ class TestOrchestrateBasic:
         stats = orchestrate(config, workers=1, dry_run=False)
 
         assert isinstance(stats, GenerationStats)
-        assert stats.voice_records >= 0
-        assert stats.sms_records >= 0
-        assert stats.data_records >= 0
-        assert (
-            stats.total_records
-            == (stats.voice_records + stats.sms_records + stats.data_records)
-            or stats.total_records >= 0
-        )  # anomaly pipeline may adjust totals
+        assert stats.voice_records > 0
+        assert stats.data_records > 0
+        assert stats.total_records > 0
+        # Sub-counts (voice/sms/data) are pre-anomaly; total_records is
+        # adjusted post-anomaly for duplicates and orphaned records, so
+        # the two will differ when anomalies are applied.
+        assert stats.total_records >= stats.voice_records
 
 
 # ---------------------------------------------------------------------------

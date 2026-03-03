@@ -525,7 +525,7 @@ def run_generation(
                             )
                             fwd_sub = _b_party_to_subscriber(fwd_b_result)
                             fwd_target = (
-                                fwd_sub if fwd_sub.imsi != callee.imsi else None
+                                fwd_sub if fwd_sub.msisdn != callee.msisdn else None
                             )
 
                             cdrs = generate_voice_cdr(
@@ -743,8 +743,11 @@ def run_generation(
                             contact_threshold=_b_contact_threshold,
                         )
                         fwd_sub = _b_party_to_subscriber(fwd_b_result)
+                        # Compare MSISDNs, not IMSIs: all external numbers
+                        # share imsi="external", so IMSI comparison would
+                        # wrongly suppress forwarding when both are external.
                         fwd_target = (
-                            fwd_sub if fwd_sub.imsi != callee.imsi else None
+                            fwd_sub if fwd_sub.msisdn != callee.msisdn else None
                         )
 
                         cdrs = generate_voice_cdr(
@@ -808,8 +811,14 @@ def run_generation(
                                 _apply_vendor_extensions(
                                     cdr, smsc_ne, vendor_ext_cfg, np_rng
                                 )
+                            # SMS MT delivery delay can span up to 86400s;
+                            # use actual event_timestamp date (not step date)
+                            # to match slow-path bucketing.
+                            _sms_date = min(
+                                cdr.event_timestamp.date(), _end_date
+                            )
                             records_by_ne_date[
-                                (cdr.serving_ne_id, step_cdr_date)
+                                (cdr.serving_ne_id, _sms_date)
                             ].append(cdr)
                             stats.sms_records += 1
                             stats.total_records += 1

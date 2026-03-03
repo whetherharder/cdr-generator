@@ -1,7 +1,7 @@
 # CDR Generator -- Progress Tracker
 
-**Last updated**: 2026-02-28 (all phases complete)
-**Tests**: 434 total (433 passed, 1 skipped)
+**Last updated**: 2026-03-03 (all phases complete + performance optimization)
+**Tests**: 436 total (435 passed, 1 skipped)
 
 ---
 
@@ -14,7 +14,8 @@
 | Phase 3 | DONE | 232 | PR #2 merged |
 | Phase 4 | DONE | 366 | PR #2 merged |
 | Phase 5 | DONE | 405 | PR #3 merged |
-| Phase 6 | DONE | 434 | pending PR |
+| Phase 6 | DONE | 434 | PR #4 merged |
+| Performance | DONE | 436 | feature/performance-50k-optimization |
 
 ---
 
@@ -38,3 +39,9 @@ Call forwarding (3 CDRs), concurrency limits, disabled cell cause_code=38.
 ### Phase 6: Multiprocess
 Orchestrator, subscriber sharding, per-subscriber deterministic seeds, --workers CLI flag.
 Determinism verified: workers=1 vs workers=N produce identical output.
+
+### Performance Optimization (feature/performance-50k-optimization)
+Vectorized Poisson batch sampling, `_RngBuffer` 2048-element batched RNG, `__slots__` on
+CDRRecord, `lru_cache` for datetime formatting, pre-computed config caches.
+Achieved: ~57k CDR/sec (100 subs × 24h), 14% above the 50k/sec target.
+Test: `pytest tests/test_performance.py -v`

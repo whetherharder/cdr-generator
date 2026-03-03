@@ -5,9 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
-from typing import Any
-
-
 def reset_fmt_cache() -> None:
     """Clear the datetime → ISO string format cache.
 
@@ -98,18 +95,6 @@ class CDRRecord:
     rat_type: str | None = None
     consolidation_id: str | None = None
     vendor_extensions: str | None = None
-
-
-def _format_value(value: Any) -> str:
-    """Format a single field value for CSV output."""
-    if value is None:
-        return ""
-    if isinstance(value, datetime):
-        return value.strftime("%Y-%m-%dT%H:%M:%S.") + f"{value.microsecond // 1000:03d}Z"
-    if isinstance(value, float):
-        # Avoid trailing zeros but keep precision
-        return f"{value:g}"
-    return str(value)
 
 
 @lru_cache(maxsize=16384)
