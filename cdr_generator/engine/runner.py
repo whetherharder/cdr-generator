@@ -700,13 +700,6 @@ def run_generation(
 
                 n_voice, n_sms, n_data = _active_counts[_ap_i]
 
-                # PERFORMANCE: Pre-compute CDR date once per active pair.
-                # step_time is always within [start_dt, end_dt] by construction
-                # so step_time.date() <= _end_date always holds.  Used for voice
-                # CDRs (MT jitter is sub-minute, never crosses midnight) and the
-                # base date for other types that need per-record date checks.
-                step_cdr_date = step_time.date()
-
                 _sub_contacts = sub_contacts[sub_idx]
 
                 # --- Voice MO ---
@@ -767,8 +760,11 @@ def run_generation(
                                 _apply_vendor_extensions(
                                     cdr, msc_ne, vendor_ext_cfg, np_rng
                                 )
+                            # Use actual CDR timestamp date to handle MT jitter
+                            # that may cross midnight (matches slow-path behavior).
+                            _voice_date = min(cdr.event_timestamp.date(), _end_date)
                             records_by_ne_date[
-                                (cdr.serving_ne_id, step_cdr_date)
+                                (cdr.serving_ne_id, _voice_date)
                             ].append(cdr)
                             stats.voice_records += 1
                             stats.total_records += 1

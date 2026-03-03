@@ -20,11 +20,13 @@ def generate_cells(config: CDRGeneratorConfig, rng: random.Random) -> list[Cell]
     network = config.network
 
     if network.auto_generate.enabled:
-        raise NotImplementedError("auto_generate cells is not implemented in Phase 1")
+        raise ValueError(
+            "auto_generate cells is not supported; use inline cell definitions"
+        )
 
     if network.cells.source == "file":
-        raise NotImplementedError(
-            "file-based cell source is not implemented in Phase 1"
+        raise ValueError(
+            "file-based cell source is not supported; use inline cell definitions"
         )
 
     # inline source
