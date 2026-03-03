@@ -43,10 +43,11 @@ def build_benchmark_config(
     end_second = 59
 
     if hours > 24:
-        days = hours // 24
-        remainder = hours % 24
+        total_end_hours = hours - 1
+        days = total_end_hours // 24
+        end_hour = total_end_hours % 24
         end_str = (
-            f"2025-01-{1 + days:02d}T{remainder:02d}:{end_minute:02d}:{end_second:02d}Z"
+            f"2025-01-{1 + days:02d}T{end_hour:02d}:{end_minute:02d}:{end_second:02d}Z"
         )
     else:
         end_str = f"2025-01-01T{end_hour:02d}:{end_minute:02d}:{end_second:02d}Z"
@@ -532,7 +533,13 @@ def _prime_specializer() -> None:
         with _tf.TemporaryDirectory() as _d:
             _o = str(Path(_d) / "output")
             Path(_o).mkdir()
-            _run(_Cfg(**build_benchmark_config(output_dir=_o, total_subscribers=100, hours=24)))
+            _run(
+                _Cfg(
+                    **build_benchmark_config(
+                        output_dir=_o, total_subscribers=100, hours=24
+                    )
+                )
+            )
     except Exception:
         pass  # Warmup failure must never break test collection
 

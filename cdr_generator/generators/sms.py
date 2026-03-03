@@ -59,9 +59,7 @@ def generate_sms_cdr(
     if _buf is not None:
         consolidation_id = _buf.get_uuid()
     else:
-        consolidation_id = bytes(
-            rng.integers(0, 256, size=16, dtype="uint8")
-        ).hex()
+        consolidation_id = bytes(rng.integers(0, 256, size=16, dtype="uint8")).hex()
 
     mo = CDRRecord(
         record_type="mo_sms",

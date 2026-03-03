@@ -241,8 +241,7 @@ def run_generation(
     # dict.get calls inside the hot path for data/voice generators).
     voice_cfg_cache = build_voice_cfg_cache(voice_cfg)
     data_cfg_cache_by_profile: dict[str, Any] = {
-        pname: build_data_cfg_cache(cfg)
-        for pname, cfg in data_cfg_by_profile.items()
+        pname: build_data_cfg_cache(cfg) for pname, cfg in data_cfg_by_profile.items()
     }
 
     # PERFORMANCE: Pre-build contact list per subscriber (indexed by
@@ -254,15 +253,9 @@ def run_generation(
 
     # PERFORMANCE: Pre-extract b_party config constants (avoids 2
     # config.get() calls per b_party selection call).
-    _b_ext_ratio: float = float(
-        contact_book_cfg.get("external_call_ratio", 0.15)
-    )
-    _b_repeat_prob: float = float(
-        contact_book_cfg.get("repeat_call_probability", 0.6)
-    )
-    _b_contact_threshold: float = (
-        _b_ext_ratio + (1.0 - _b_ext_ratio) * _b_repeat_prob
-    )
+    _b_ext_ratio: float = float(contact_book_cfg.get("external_call_ratio", 0.15))
+    _b_repeat_prob: float = float(contact_book_cfg.get("repeat_call_probability", 0.6))
+    _b_contact_threshold: float = _b_ext_ratio + (1.0 - _b_ext_ratio) * _b_repeat_prob
     _n_ext = len(external_numbers)
 
     # PERFORMANCE: Pre-cache per-subscriber home cell, TAC, and NE lookups
@@ -270,10 +263,18 @@ def run_generation(
     # For the common case (no roaming), cell/TAC never changes.
     sub_home_cells = [cells_by_id[sub.home_cell_id] for sub, _ in sub_profile_pairs]
     sub_home_tacs = [sub_home_cells[i].tac for i in range(len(sub_profile_pairs))]
-    sub_msc_nes = [msc_by_tac.get(sub_home_tacs[i]) for i in range(len(sub_profile_pairs))]
-    sub_smsc_nes = [smsc_by_tac.get(sub_home_tacs[i]) for i in range(len(sub_profile_pairs))]
-    sub_sgw_nes = [sgw_by_tac.get(sub_home_tacs[i]) for i in range(len(sub_profile_pairs))]
-    sub_data_cfgs = [data_cfg_by_profile[sub.profile_name] for sub, _ in sub_profile_pairs]
+    sub_msc_nes = [
+        msc_by_tac.get(sub_home_tacs[i]) for i in range(len(sub_profile_pairs))
+    ]
+    sub_smsc_nes = [
+        smsc_by_tac.get(sub_home_tacs[i]) for i in range(len(sub_profile_pairs))
+    ]
+    sub_sgw_nes = [
+        sgw_by_tac.get(sub_home_tacs[i]) for i in range(len(sub_profile_pairs))
+    ]
+    sub_data_cfgs = [
+        data_cfg_by_profile[sub.profile_name] for sub, _ in sub_profile_pairs
+    ]
     sub_data_cfg_caches_list = [
         data_cfg_cache_by_profile[sub.profile_name] for sub, _ in sub_profile_pairs
     ]
@@ -442,9 +443,7 @@ def run_generation(
                                 cdr_date = min(
                                     failed_cdr.event_timestamp.date(), _end_date
                                 )
-                                records_by_ne_date[(ne_id, cdr_date)].append(
-                                    failed_cdr
-                                )
+                                records_by_ne_date[(ne_id, cdr_date)].append(failed_cdr)
                                 stats.voice_records += 1
                                 stats.total_records += 1
                             continue
@@ -547,9 +546,7 @@ def run_generation(
                                     cdr, msc_ne, vendor_ext_cfg, np_rng
                                 )
                                 ne_id = cdr.serving_ne_id
-                                cdr_date = min(
-                                    cdr.event_timestamp.date(), _end_date
-                                )
+                                cdr_date = min(cdr.event_timestamp.date(), _end_date)
                                 records_by_ne_date[(ne_id, cdr_date)].append(cdr)
                                 stats.voice_records += 1
                                 stats.total_records += 1
@@ -587,9 +584,7 @@ def run_generation(
                                     cdr, smsc_ne, vendor_ext_cfg, np_rng
                                 )
                                 ne_id = cdr.serving_ne_id
-                                cdr_date = min(
-                                    cdr.event_timestamp.date(), _end_date
-                                )
+                                cdr_date = min(cdr.event_timestamp.date(), _end_date)
                                 records_by_ne_date[(ne_id, cdr_date)].append(cdr)
                                 stats.sms_records += 1
                                 stats.total_records += 1
@@ -618,9 +613,7 @@ def run_generation(
                                         cdr, serving_ne, vendor_ext_cfg, np_rng
                                     )
                                 ne_id = cdr.serving_ne_id
-                                cdr_date = min(
-                                    cdr.event_timestamp.date(), _end_date
-                                )
+                                cdr_date = min(cdr.event_timestamp.date(), _end_date)
                                 records_by_ne_date[(ne_id, cdr_date)].append(cdr)
                                 stats.data_records += 1
                                 stats.total_records += 1
@@ -633,9 +626,7 @@ def run_generation(
             # then iterates only over non-zero (step, sub) pairs.
             # This eliminates ~98% of empty iterations.
             # -------------------------------------------------------
-            rate_matrix = _build_rate_matrix(
-                hour, dow, voice_mult, sms_mult, data_mult
-            )
+            rate_matrix = _build_rate_matrix(hour, dow, voice_mult, sms_mult, data_mult)
 
             # Sample counts for all steps × subscribers × event types
             # rate_matrix shape: (n_subs, 3)
@@ -814,12 +805,10 @@ def run_generation(
                             # SMS MT delivery delay can span up to 86400s;
                             # use actual event_timestamp date (not step date)
                             # to match slow-path bucketing.
-                            _sms_date = min(
-                                cdr.event_timestamp.date(), _end_date
+                            _sms_date = min(cdr.event_timestamp.date(), _end_date)
+                            records_by_ne_date[(cdr.serving_ne_id, _sms_date)].append(
+                                cdr
                             )
-                            records_by_ne_date[
-                                (cdr.serving_ne_id, _sms_date)
-                            ].append(cdr)
                             stats.sms_records += 1
                             stats.total_records += 1
 

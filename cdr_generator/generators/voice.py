@@ -137,9 +137,7 @@ def generate_voice_cdr(
     if _buf is not None:
         consolidation_id = _buf.get_uuid()
     else:
-        consolidation_id = bytes(
-            rng.integers(0, 256, size=16, dtype="uint8")
-        ).hex()
+        consolidation_id = bytes(rng.integers(0, 256, size=16, dtype="uint8")).hex()
 
     if not is_success:
         return _generate_failed_call(

@@ -118,9 +118,7 @@ def build_data_cfg_cache(data_cfg: dict) -> _DataCfgCache:
         term_list=term_list,
         term_probs=term_probs,
         partial_enabled=bool(partial_cfg.get("enabled", True)),
-        max_record_duration=float(
-            partial_cfg.get("max_record_duration_seconds", 3600)
-        ),
+        max_record_duration=float(partial_cfg.get("max_record_duration_seconds", 3600)),
         max_record_volume=int(partial_cfg.get("max_record_volume_bytes", 104857600)),
     )
 
