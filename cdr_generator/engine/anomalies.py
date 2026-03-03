@@ -224,7 +224,7 @@ def apply_orphaned(
         elif rt in (_SMS_MO, _SMS_MT) and rec.consolidation_id is not None:
             key = (rec.consolidation_id, "sms")
         elif rt in (_DATA_SGW, _DATA_PGW) and rec.charging_id is not None:
-            key = (rec.charging_id, "data")
+            key = (rec.charging_id, rec.sequence_number, "data")
         else:
             continue
         pairs.setdefault(key, []).append(idx)

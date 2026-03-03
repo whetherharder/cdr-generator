@@ -97,6 +97,8 @@ class _RngBuffer:
 
     def get_int(self, lo: int, hi_excl: int) -> int:
         """Return next pre-generated integer in [lo, hi_excl)."""
+        if lo >= hi_excl:
+            return lo
         key = (lo, hi_excl)
         b = self._ints.get(key)
         if b is None or b.pos >= _BATCH:

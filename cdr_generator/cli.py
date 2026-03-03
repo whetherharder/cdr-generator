@@ -173,6 +173,11 @@ def generate(
         save_assets(assets_path, cells, nes, subs, config_hash)
 
     if workers > 1:
+        click.echo(
+            f"Warning: --workers {workers} requested but generation runs single-threaded "
+            "(multi-process not yet implemented).",
+            err=True,
+        )
         stats = orchestrate(config, workers=workers, dry_run=dry_run)
     else:
         stats = run_generation(config, dry_run=dry_run)

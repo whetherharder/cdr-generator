@@ -543,9 +543,10 @@ def run_generation(
                                 if cdr.served_imsi == sub.imsi:
                                     cdr.first_cell_id = first_cell_id
                                     cdr.last_cell_id = last_cell_id
-                                _apply_vendor_extensions(
-                                    cdr, msc_ne, vendor_ext_cfg, np_rng
-                                )
+                                if _has_vendor_ext:
+                                    _apply_vendor_extensions(
+                                        cdr, msc_ne, vendor_ext_cfg, np_rng
+                                    )
                                 ne_id = cdr.serving_ne_id
                                 cdr_date = min(cdr.event_timestamp.date(), _end_date)
                                 records_by_ne_date[(ne_id, cdr_date)].append(cdr)
@@ -581,9 +582,10 @@ def run_generation(
                                 if cdr.served_imsi == sub.imsi:
                                     cdr.first_cell_id = first_cell_id
                                     cdr.last_cell_id = last_cell_id
-                                _apply_vendor_extensions(
-                                    cdr, smsc_ne, vendor_ext_cfg, np_rng
-                                )
+                                if _has_vendor_ext:
+                                    _apply_vendor_extensions(
+                                        cdr, smsc_ne, vendor_ext_cfg, np_rng
+                                    )
                                 ne_id = cdr.serving_ne_id
                                 cdr_date = min(cdr.event_timestamp.date(), _end_date)
                                 records_by_ne_date[(ne_id, cdr_date)].append(cdr)
@@ -612,11 +614,12 @@ def run_generation(
                             for cdr in cdrs:
                                 cdr.first_cell_id = first_cell_id
                                 cdr.last_cell_id = last_cell_id
-                                serving_ne = nes_by_id.get(cdr.serving_ne_id)
-                                if serving_ne is not None:
-                                    _apply_vendor_extensions(
-                                        cdr, serving_ne, vendor_ext_cfg, np_rng
-                                    )
+                                if _has_vendor_ext:
+                                    serving_ne = nes_by_id.get(cdr.serving_ne_id)
+                                    if serving_ne is not None:
+                                        _apply_vendor_extensions(
+                                            cdr, serving_ne, vendor_ext_cfg, np_rng
+                                        )
                                 ne_id = cdr.serving_ne_id
                                 cdr_date = min(cdr.event_timestamp.date(), _end_date)
                                 records_by_ne_date[(ne_id, cdr_date)].append(cdr)
