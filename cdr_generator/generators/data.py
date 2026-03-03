@@ -45,7 +45,7 @@ class _DataCfgCache:
     apn_probs: tuple
     qci_list: list
     qci_probs: tuple
-    term_list: list
+    term_codes: list
     term_probs: tuple
     partial_enabled: bool
     max_record_duration: float
@@ -87,12 +87,12 @@ def build_data_cfg_cache(data_cfg: dict) -> _DataCfgCache:
     # Termination causes
     causes = data_cfg.get("termination_causes", [])
     if causes:
-        term_list = [c["cause"] for c in causes]
+        term_codes = [c.get("code") for c in causes]
         raw_term_w = [c["weight"] for c in causes]
         total_term = sum(raw_term_w) or 1.0
         term_probs = tuple(w / total_term for w in raw_term_w)
     else:
-        term_list = ["normal_release"]
+        term_codes = [None]
         term_probs = (1.0,)
 
     # Partial records
@@ -115,7 +115,7 @@ def build_data_cfg_cache(data_cfg: dict) -> _DataCfgCache:
         apn_probs=apn_probs,
         qci_list=qci_list,
         qci_probs=qci_probs,
-        term_list=term_list,
+        term_codes=term_codes,
         term_probs=term_probs,
         partial_enabled=bool(partial_cfg.get("enabled", True)),
         max_record_duration=float(partial_cfg.get("max_record_duration_seconds", 3600)),
@@ -185,8 +185,8 @@ def generate_data_cdr(
 
         apn = _cfg.apn_list[_buf.get_choice(len(_cfg.apn_list), _cfg.apn_probs)]
         qci = _cfg.qci_list[_buf.get_choice(len(_cfg.qci_list), _cfg.qci_probs)]
-        termination_cause = _cfg.term_list[
-            _buf.get_choice(len(_cfg.term_list), _cfg.term_probs)
+        termination_cause = _cfg.term_codes[
+            _buf.get_choice(len(_cfg.term_codes), _cfg.term_probs)
         ]
 
         if _cfg.partial_enabled and duration > _cfg.max_record_duration:
@@ -307,7 +307,7 @@ def _generate_partial_records(
     max_volume: int,
     apn: str,
     qci: int,
-    termination_cause: str,
+    termination_cause: int | None,
     rng: np.random.Generator,
 ) -> list[CDRRecord]:
     """Split a long session into multiple partial records."""
@@ -363,7 +363,7 @@ def _create_sgw_pgw_pair(
     downlink_bytes: int,
     apn: str,
     qci: int,
-    termination_cause: str,
+    termination_cause: int | None,
     sequence_number: int | None = None,
 ) -> list[CDRRecord]:
     """Create one SGW + one PGW CDR record pair."""
@@ -387,7 +387,7 @@ def _create_sgw_pgw_pair(
         first_cell_id=cell.cell_id,
         last_cell_id=cell.cell_id,
         serving_ne_id=sgw.id,
-        cause_for_termination=None,
+        cause_for_termination=termination_cause,
         sequence_number=sequence_number,
         rat_type="eutran",
     )
@@ -409,7 +409,7 @@ def _create_sgw_pgw_pair(
         first_cell_id=cell.cell_id,
         last_cell_id=cell.cell_id,
         serving_ne_id=pgw.id,
-        cause_for_termination=None,
+        cause_for_termination=termination_cause,
         sequence_number=sequence_number,
         rat_type="eutran",
     )
@@ -478,12 +478,12 @@ def _pick_termination_cause(
     data_cfg: dict,
     rng: np.random.Generator,
     _buf: _RngBuffer | None = None,
-) -> str:
-    """Pick a data session termination cause from weighted list."""
+) -> int | None:
+    """Pick a data session termination cause code from weighted list."""
     causes = data_cfg.get("termination_causes", [])
     if not causes:
-        return "normal_release"
+        return None
 
     weights = [c["weight"] for c in causes]
     idx = _weighted_choice(weights, rng, _buf=_buf)
-    return causes[idx]["cause"]
+    return causes[idx].get("code")

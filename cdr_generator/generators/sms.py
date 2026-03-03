@@ -124,13 +124,11 @@ def _pick_sms_failure_cause(
     rng: np.random.Generator,
     _buf: _RngBuffer | None = None,
 ) -> int:
-    """Pick an SMS failure cause from weighted list."""
+    """Pick an SMS failure cause code from weighted list."""
     causes = sms_cfg.get("failure_causes", [])
     if not causes:
         return 1  # default generic failure
 
     weights = [c["weight"] for c in causes]
-    _weighted_choice(weights, rng, _buf=_buf)  # consume RNG for determinism
-    # SMS failure causes typically don't have numeric codes in config,
-    # use a default absent_subscriber code
-    return 1
+    idx = _weighted_choice(weights, rng, _buf=_buf)
+    return causes[idx].get("code") or 1

@@ -240,6 +240,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "cause":  { "type": "string" },
+                  "code":   { "type": ["integer", "null"] },
                   "weight": { "type": "number", "minimum": 0 }
                 }
               }
@@ -260,6 +261,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "cause":  { "type": "string" },
+                  "code":   { "type": ["integer", "null"] },
                   "weight": { "type": "number", "minimum": 0 }
                 }
               }

@@ -278,6 +278,7 @@ class PartialRecordsConfig(BaseModel):
 
 class DataTerminationCause(BaseModel):
     cause: str
+    code: int | None = None
     weight: float = Field(ge=0.0)
 
 
